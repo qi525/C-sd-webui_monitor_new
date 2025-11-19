@@ -154,9 +154,8 @@ namespace WebUIMonitor
                     VirtualMemoryText = vmText,
                     FileCount = _fileMonitor.FileCount,
                     IsAlarm = isAlarm,
-                    MonitoringPath = _pathManager.GetTodayPath(),
-                    DisplayPath = _pathManager.GetDisplayText(),
-                    CurrentBasePath = _currentBasePath
+                    ConfiguredPath = _currentBasePath,
+                    TodayMonitoringPath = _pathManager.GetTodayPath()
                 };
             });
         }
@@ -170,11 +169,6 @@ namespace WebUIMonitor
         /// 获取当前监控的今日路径
         /// </summary>
         public string GetTodayPath() => _pathManager.GetTodayPath();
-
-        /// <summary>
-        /// 获取显示文本
-        /// </summary>
-        public string GetDisplayText() => _pathManager.GetDisplayText();
     }
 
     /// <summary>
@@ -208,8 +202,14 @@ namespace WebUIMonitor
         public bool IsAlarm { get; set; }
         
         // 路径信息
-        public string MonitoringPath { get; set; }
-        public string DisplayPath { get; set; }
-        public string CurrentBasePath { get; set; }
+        /// <summary>
+        /// config.json 中配置的路径（基础路径）
+        /// </summary>
+        public string ConfiguredPath { get; set; }
+        
+        /// <summary>
+        /// 今日的完整监控路径（ConfiguredPath + \txt2img-images\yyyy-MM-dd）
+        /// </summary>
+        public string TodayMonitoringPath { get; set; }
     }
 }

@@ -115,29 +115,21 @@ namespace WebUIMonitor
             {
                 System.Diagnostics.Debug.WriteLine($"[配置] 错误: 监控路径不存在: {_config.MonitoringPath}");
                 
-                // 如果启用自动检测，尝试扫描
-                if (_config.AutoDetect)
-                {
-                    string detectedPath = GetDefaultPath();
-                    if (detectedPath != _config.MonitoringPath && Directory.Exists(detectedPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[配置] 自动检测到路径: {detectedPath}");
-                        _config.MonitoringPath = detectedPath;
-                        SaveConfig();
-                        return _config.MonitoringPath;
-                    }
-                }
-
-                // 如果自动检测失败，提示用户修改 config.json
-                string message = $"配置的监控路径不存在:\n\n{_config.MonitoringPath}\n\n" +
+                // 提示用户修改 config.json
+                string message = $"❌ 配置的监控路径不存在!\n\n" +
+                    $"当前路径: {_config.MonitoringPath}\n\n" +
                     $"请编辑同级目录下的 config.json 文件，\n" +
-                    $"修改 \"MonitoringPath\" 为正确的路径。\n\n" +
+                    $"修改 \"MonitoringPath\" 为正确的文件夹路径。\n\n" +
                     $"示例:\n" +
-                    $"\"MonitoringPath\": \"C:\\\\stable-diffusion-webui\\\\outputs\"";
+                    $"\"MonitoringPath\": \"C:\\\\stable-diffusion-webui\\\\outputs\"\n\n" +
+                    $"修改后重启程序。";
                 
-                System.Windows.Forms.MessageBox.Show(message, "配置错误", 
+                System.Windows.Forms.MessageBox.Show(message, "❌ 配置错误 - 程序无法启动", 
                     System.Windows.Forms.MessageBoxButtons.OK, 
-                    System.Windows.Forms.MessageBoxIcon.Warning);
+                    System.Windows.Forms.MessageBoxIcon.Error);
+                
+                // 退出程序
+                System.Environment.Exit(1);
             }
 
             return _config.MonitoringPath;

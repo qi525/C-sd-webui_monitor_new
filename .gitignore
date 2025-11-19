@@ -41,3 +41,6 @@ debug.log
 temp/
 cache/
 .env
+
+
+publish/

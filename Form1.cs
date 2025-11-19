@@ -34,6 +34,10 @@ namespace WebUIMonitor
             var configManager = new ConfigManager();
             string initialPath = configManager.GetMonitoringPath();
             
+            // 如果路径不存在，检查后会显示错误提示
+            // 但我们仍然继续启动服务（使用配置中的路径），
+            // 这样用户修改 config.json 后程序才能正常工作
+            
             // 创建服务
             _service = new MonitoringService(initialPath);
             
@@ -229,8 +233,8 @@ namespace WebUIMonitor
             string fileCountText = data.FileCount >= 0 ? $"文件数: {data.FileCount}" : "文件数: 初始化中...";
             lblFileCount.Text = fileCountText;
 
-            // 更新监控路径（这是关键！直接从Service获取，不会被覆盖）
-            lblMonitorPath.Text = data.DisplayPath;
+            // 更新监控路径 - 显示今日的实际监控路径
+            lblMonitorPath.Text = $"目前监控文件夹位置: {data.TodayMonitoringPath}";
 
             // 更新状态
             if (data.IsAlarm)
