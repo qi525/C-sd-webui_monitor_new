@@ -1,0 +1,5 @@
+{
+  "MonitoringPath": "C:\\stable-diffusion-webui\\outputs",
+  "AudioPath": "alarm.wav",
+  "AutoDetect": true
+}

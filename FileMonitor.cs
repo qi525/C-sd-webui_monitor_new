@@ -7,16 +7,16 @@ namespace WebUIMonitor
 {
     /// <summary>
     /// 文件夹监控模块 - 检测文件数量变化，触发警报
-    /// 逻辑: 文件数持续增加 → 正常; 文件数不变或减少 → 触发警报
+    /// 逻辑: 如果 30 秒内文件数没有增加，则触发警报
     /// </summary>
     public class FileMonitor
     {
         private string _monitorPath;
         private bool _isAlarm = false;
         private int _lastFileCount = -1;
-        private int _consecutiveIncreaseCount = 0;
-        private const int IncreaseThreshold = 2; // 连续增加多少次才算"持续增加"
-        private const int CheckIntervalMs = 10000; // 检查间隔（毫秒）
+        private DateTime _lastFileChangeTime = DateTime.Now;
+        private const int NoChangeAlarmSeconds = 30; // 30 秒没有新增文件就报警
+        private const int CheckIntervalMs = 3000; // 每 3 秒检查一次
         private bool _isRunning = false;
 
         public FileMonitor(string monitorPath)
@@ -59,41 +59,35 @@ namespace WebUIMonitor
             if (_lastFileCount == -1)
             {
                 _lastFileCount = currentFileCount;
+                _lastFileChangeTime = DateTime.Now;
                 return;
             }
 
-            // 对比逻辑（参考 Python 脚本）
+            // 检查是否有新文件生成
             if (currentFileCount > _lastFileCount)
             {
-                // 文件数增加 ✅
-                _consecutiveIncreaseCount++;
+                // 文件数增加 ✅ - 重置计时，取消警报
+                _lastFileCount = currentFileCount;
+                _lastFileChangeTime = DateTime.Now;
+                _isAlarm = false;
+            }
+            else
+            {
+                // 文件数不变或减少 - 检查是否超过 30 秒
+                int secondsSinceLastChange = (int)(DateTime.Now - _lastFileChangeTime).TotalSeconds;
                 
-                if (_consecutiveIncreaseCount >= IncreaseThreshold)
+                if (secondsSinceLastChange >= NoChangeAlarmSeconds)
                 {
-                    // 达到阈值，确认为持续增加，取消警报
+                    // 超过 30 秒没有新文件 🚨 - 触发警报
+                    _isAlarm = true;
+                }
+                else
+                {
+                    // 还在 30 秒内 - 等待中
                     _isAlarm = false;
                 }
             }
-            else if (currentFileCount == _lastFileCount)
-            {
-                // 文件数不变 🛑
-                if (_consecutiveIncreaseCount > 0)
-                {
-                    _consecutiveIncreaseCount = 0;
-                }
-                _isAlarm = true; // 触发警报
-            }
-            else if (currentFileCount < _lastFileCount)
-            {
-                // 文件数减少 ⚠️
-                _consecutiveIncreaseCount = 0;
-                _isAlarm = true; // 触发警报
-            }
-
-            _lastFileCount = currentFileCount;
-        }
-
-        public bool IsAlarm => _isAlarm;
+        }        public bool IsAlarm => _isAlarm;
         public int FileCount => _lastFileCount;
 
         public void Stop()
