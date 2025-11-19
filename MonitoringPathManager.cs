@@ -4,22 +4,21 @@ using System.IO;
 namespace WebUIMonitor
 {
     /// <summary>
-    /// 监控文件夹路径管理器 - 处理所有与路径相关的逻辑
-    /// 职责：
-    /// 1. 管理监控的基础路径（来自 config.json）
-    /// 2. 计算今日的实际监控路径（基础路径 + txt2img-images + yyyy-MM-dd）
-    /// 3. 获取该路径下的文件数
+    /// 监控文件夹路径管理器
+    /// 逻辑：
+    /// 1. 读取 config.json 中的基础路径
+    /// 2. 检查是否存在 txt2img-images\yyyy-MM-dd 子文件夹
+    /// 3. 如果存在就监控那个文件夹，否则直接监控基础路径
     /// </summary>
     public class MonitoringPathManager
     {
         private string _configuredPath;  // 来自 config.json 的路径
-        private string _todayPath;       // 今日的实际监控路径
-        private int _lastFileCount = -1; // 缓存的文件数
+        private string _actualMonitorPath;  // 实际监控的路径
 
         public MonitoringPathManager(string configuredPath)
         {
             _configuredPath = configuredPath ?? throw new ArgumentNullException(nameof(configuredPath));
-            CalculateTodayPath();
+            CalculateActualPath();
         }
 
         /// <summary>
@@ -28,7 +27,7 @@ namespace WebUIMonitor
         public void SetBasePath(string basePath)
         {
             _configuredPath = basePath ?? throw new ArgumentNullException(nameof(basePath));
-            CalculateTodayPath();
+            CalculateActualPath();
         }
 
         /// <summary>
@@ -37,28 +36,38 @@ namespace WebUIMonitor
         public string GetConfiguredPath() => _configuredPath;
 
         /// <summary>
-        /// 计算今日的监控路径
-        /// 格式: {configuredPath}\txt2img-images\yyyy-MM-dd
+        /// 计算实际监控的路径
+        /// 逻辑：
+        /// - 如果存在 {configuredPath}\txt2img-images\yyyy-MM-dd 就用它
+        /// - 否则直接用 {configuredPath}
         /// </summary>
-        private void CalculateTodayPath()
+        private void CalculateActualPath()
         {
             string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
-            _todayPath = Path.Combine(_configuredPath, "txt2img-images", todayFolder);
-            _lastFileCount = -1;
+            string potentialPath = Path.Combine(_configuredPath, "txt2img-images", todayFolder);
+
+            if (Directory.Exists(potentialPath))
+            {
+                // 存在子文件夹，使用它
+                _actualMonitorPath = potentialPath;
+                System.Diagnostics.Debug.WriteLine($"[MonitoringPathManager] 检测到子文件夹: {_actualMonitorPath}");
+            }
+            else
+            {
+                // 不存在子文件夹，使用配置的路径
+                _actualMonitorPath = _configuredPath;
+                System.Diagnostics.Debug.WriteLine($"[MonitoringPathManager] 使用配置路径: {_actualMonitorPath}");
+            }
         }
 
         /// <summary>
-        /// 获取今日的监控路径（完整路径）
+        /// 获取实际的监控路径
         /// </summary>
-        public string GetTodayPath()
+        public string GetActualMonitorPath()
         {
-            // 检查日期是否变化，如果变化则重新计算
-            string todayFolder = DateTime.Now.ToString("yyyy-MM-dd");
-            if (!_todayPath.Contains(todayFolder))
-            {
-                CalculateTodayPath();
-            }
-            return _todayPath;
+            // 每次获取时都重新计算，这样日期变化时能自动切换到新日期的文件夹
+            CalculateActualPath();
+            return _actualMonitorPath;
         }
 
         /// <summary>
@@ -66,22 +75,20 @@ namespace WebUIMonitor
         /// </summary>
         public int GetFileCount()
         {
-            string todayPath = GetTodayPath();
+            string monitorPath = GetActualMonitorPath();
 
-            if (!Directory.Exists(todayPath))
+            if (!Directory.Exists(monitorPath))
             {
                 return 0;
             }
 
             try
             {
-                int count = Directory.GetFiles(todayPath).Length;
-                _lastFileCount = count;
-                return count;
+                return Directory.GetFiles(monitorPath).Length;
             }
             catch
             {
-                return _lastFileCount >= 0 ? _lastFileCount : 0;
+                return 0;
             }
         }
     }

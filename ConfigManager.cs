@@ -110,6 +110,10 @@ namespace WebUIMonitor
         /// </summary>
         public string GetMonitoringPath()
         {
+            System.Diagnostics.Debug.WriteLine($"[ConfigManager] GetMonitoringPath 被调用");
+            System.Diagnostics.Debug.WriteLine($"[ConfigManager] _config.MonitoringPath = {_config.MonitoringPath}");
+            System.Diagnostics.Debug.WriteLine($"[ConfigManager] Directory.Exists 结果 = {Directory.Exists(_config.MonitoringPath)}");
+            
             // 检查配置的路径是否存在
             if (!Directory.Exists(_config.MonitoringPath))
             {
@@ -132,6 +136,7 @@ namespace WebUIMonitor
                 System.Environment.Exit(1);
             }
 
+            System.Diagnostics.Debug.WriteLine($"[ConfigManager] 返回路径: {_config.MonitoringPath}");
             return _config.MonitoringPath;
         }
 

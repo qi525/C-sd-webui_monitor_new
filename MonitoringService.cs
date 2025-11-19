@@ -29,7 +29,9 @@ namespace WebUIMonitor
         {
             _currentBasePath = initialPath;
             _pathManager = new MonitoringPathManager(initialPath);
-            _fileMonitor = new FileMonitor(initialPath);
+            // FileMonitor 使用 PathManager 计算的实际监控路径
+            string actualPath = _pathManager.GetActualMonitorPath();
+            _fileMonitor = new FileMonitor(actualPath);
             _systemMonitor = new SystemMonitor();
             _audioPlayer = new AudioPlayer(Config.GetAudioPath());
             
@@ -119,6 +121,19 @@ namespace WebUIMonitor
             // 在线程池线程上执行，避免阻塞UI线程
             return await Task.Run(() =>
             {
+                // 每次都重新读取 config.json，这样改了配置立即生效
+                var configManager = new ConfigManager();
+                string currentPath = configManager.GetMonitoringPath();
+                
+                // 如果路径改变了，更新 PathManager
+                if (currentPath != _currentBasePath)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MonitoringService] 路径已改变: {_currentBasePath} -> {currentPath}");
+                    _currentBasePath = currentPath;
+                    _pathManager.SetBasePath(currentPath);
+                    _fileMonitor.SetMonitorPath(currentPath);
+                }
+                
                 var (gpuName, usedVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
                 var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
                 var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
@@ -155,7 +170,7 @@ namespace WebUIMonitor
                     FileCount = _fileMonitor.FileCount,
                     IsAlarm = isAlarm,
                     ConfiguredPath = _currentBasePath,
-                    TodayMonitoringPath = _pathManager.GetTodayPath()
+                    TodayMonitoringPath = _pathManager.GetActualMonitorPath()
                 };
             });
         }
@@ -164,11 +179,6 @@ namespace WebUIMonitor
         /// 获取当前基础路径
         /// </summary>
         public string GetCurrentBasePath() => _currentBasePath;
-
-        /// <summary>
-        /// 获取当前监控的今日路径
-        /// </summary>
-        public string GetTodayPath() => _pathManager.GetTodayPath();
     }
 
     /// <summary>
