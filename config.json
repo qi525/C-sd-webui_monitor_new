@@ -1,5 +1,5 @@
 {
-  "MonitoringPath": "C:\\stable-diffusion-webui\\outputs",
+  "MonitoringPath": "C:\\stable-diffusion-webui\\outputs\\txt2img-images",
   "AudioPath": "alarm.wav",
   "AutoDetect": true
 }
