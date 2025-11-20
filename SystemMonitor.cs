@@ -18,7 +18,7 @@ namespace WebUIMonitor
         }
 
         public string GetCurrentDateTime() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-        public float GetCpuUsage() => _cpuCounter?.NextValue() ?? 0f;
+        public float GetCpuUsage() => _cpuCounter.NextValue();
 
         public (double totalGB, double usedGB, double percentageUsed) GetPhysicalMemory()
         {
@@ -47,14 +47,6 @@ namespace WebUIMonitor
             double usedGB = committed / (double)ONE_GB;
             double percent = limit > 0 ? Math.Round((double)committed / limit * 100, 1) : 0;
             return (totalGB, usedGB, percent, $"{usedGB:F1} GB / {totalGB:F1} GB ({percent:F1}%)");
-        }
-
-        public string GetGpuName()
-        {
-            using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
-            foreach (ManagementObject obj in searcher.Get())
-                return obj["Name"]?.ToString() ?? "未检测到显卡";
-            return "未检测到显卡";
         }
     }
 }

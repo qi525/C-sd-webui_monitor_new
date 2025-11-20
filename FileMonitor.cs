@@ -8,54 +8,26 @@ namespace WebUIMonitor
     public class FileMonitor
     {
         private string _path;
-        private bool _isAlarm = false;
+        private bool _isAlarm;
         private int _lastFileCount = -1;
-        private DateTime _lastFileChangeTime = DateTime.Now;
-        private bool _isRunning = false;
+        private DateTime _lastChangeTime = DateTime.Now;
+        private bool _isRunning;
 
         public void SetPath(string path) => _path = path;
 
         public void Start()
         {
             _isRunning = true;
-            _ = Task.Run(() =>
-            {
-                while (_isRunning)
-                {
-                    CheckFileCount();
-                    Thread.Sleep(3000);
-                }
-            });
+            _ = Task.Run(() => { while (_isRunning) { CheckFileCount(); Thread.Sleep(3000); } });
         }
 
         private void CheckFileCount()
         {
-            if (string.IsNullOrEmpty(_path) || !Directory.Exists(_path))
-            {
-                _lastFileCount = 0;
-                return;
-            }
-
-            int currentCount = Directory.GetFiles(_path).Length;
-
-            if (_lastFileCount == -1)
-            {
-                _lastFileCount = currentCount;
-                _lastFileChangeTime = DateTime.Now;
-                return;
-            }
-
-            if (currentCount > _lastFileCount)
-            {
-                _lastFileCount = currentCount;
-                _lastFileChangeTime = DateTime.Now;
-                _isAlarm = false;
-            }
-            else
-            {
-                int seconds = (int)(DateTime.Now - _lastFileChangeTime).TotalSeconds;
-                _isAlarm = seconds >= 30;
-            }
+            if (string.IsNullOrEmpty(_path) || !Directory.Exists(_path)) { _lastFileCount = 0; return; }
+            int count = Directory.GetFiles(_path).Length;
+            if (_lastFileCount == -1) { _lastFileCount = count; _lastChangeTime = DateTime.Now; return; }
+            if (count > _lastFileCount) { _lastFileCount = count; _lastChangeTime = DateTime.Now; _isAlarm = false; }
+            else _isAlarm = (int)(DateTime.Now - _lastChangeTime).TotalSeconds >= 30;
         }
 
         public bool IsAlarm => _isAlarm;

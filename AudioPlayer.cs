@@ -12,22 +12,17 @@ namespace WebUIMonitor
 
         public AudioPlayer(string? audioPath)
         {
-            if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath))
-            {
-                Console.WriteLine($"✗ 音频文件不存在: {audioPath}");
-                return;
-            }
-
-            _player = new SoundPlayer(audioPath);
-            Console.WriteLine($"✓ 音频文件已加载: {audioPath}");
+            if (!string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath))
+                _player = new SoundPlayer(audioPath);
         }
 
         public void Play()
         {
-            if (_player == null || _isPlaying) return;
-            _isPlaying = true;
-            Console.WriteLine("▶ 开始循环播放音频");
-            _player.PlayLooping();
+            if (_player != null && !_isPlaying)
+            {
+                _isPlaying = true;
+                _player.PlayLooping();
+            }
         }
 
         public void Stop()

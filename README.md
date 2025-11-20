@@ -15,14 +15,14 @@
 
 ```
 C#sd-webui_monitor_new/
-├── Form1.cs                    # UI 界面与事件驱动更新 (181 行)
-├── MonitoringService.cs        # 后台监控服务与数据聚合 (190 行)
-├── ConfigManager.cs            # 配置管理 - 静态工具类 (26 行)
-├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）(54 行)
-├── FileMonitor.cs              # 文件数量监控与警报逻辑 (71 行)
-├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）(98 行)
-├── AudioPlayer.cs              # 音频循环播放 (35 行)
-├── Program.cs                  # 程序入口 (16 行)
+├── Form1.cs                    # UI 界面与事件驱动更新 (118 行)
+├── MonitoringService.cs        # 后台监控服务与数据聚合 (80 行)
+├── ConfigManager.cs            # 配置管理 - 静态工具类 (16 行)
+├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）(40 行)
+├── FileMonitor.cs              # 文件数量监控与警报逻辑 (35 行)
+├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）(45 行)
+├── AudioPlayer.cs              # 音频循环播放 (23 行)
+├── Program.cs                  # 程序入口 (14 行)
 ├── config.json                 # 配置文件
 ├── alarm.wav                   # 警报音频
 └── C#sd-webui_monitor_new.csproj
@@ -82,23 +82,25 @@ dotnet publish -c Release -o publish
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
-| MonitoringService.cs | 190 | 后台监控服务与数据聚合 |
-| Form1.cs | 181 | UI 界面与事件驱动更新 |
-| GpuVramHelper.cs | 98 | GPU 显存查询（PowerShell） |
-| FileMonitor.cs | 71 | 文件数量监控与警报逻辑 |
-| SystemMonitor.cs | 54 | 系统资源监控（CPU/内存/GPU）|
-| AudioPlayer.cs | 35 | 音频循环播放 |
-| ConfigManager.cs | 26 | 静态配置管理（2 个方法） |
-| Program.cs | 16 | 程序入口 |
-| **总计** | **671** | **8 个核心模块** |
+| Form1.cs | 118 | UI 界面与事件驱动更新 |
+| MonitoringService.cs | 80 | 后台监控服务与数据聚合 |
+| GpuVramHelper.cs | 45 | GPU 显存查询（PowerShell） |
+| FileMonitor.cs | 35 | 文件数量监控与警报逻辑 |
+| SystemMonitor.cs | 40 | 系统资源监控（CPU/内存/GPU）|
+| AudioPlayer.cs | 23 | 音频循环播放 |
+| ConfigManager.cs | 16 | 静态配置管理（2 个方法） |
+| Program.cs | 14 | 程序入口 |
+| **总计** | **371** | **8 个核心模块** |
 
 **代码简化成果**:
 - 删除 `MonitoringPathManager.cs` (28 行) - 逻辑合并到 `MonitoringService`
 - 删除 `Config.cs` - 合并到 `ConfigManager.cs`
-- `ConfigManager` 从 174 行压缩到 26 行 (85% 减少)
-- `SystemMonitor` 从 147 行压缩到 54 行 (63% 减少)
-- `Form1` 从 238 行压缩到 181 行 (24% 减少)
-- **总代码量从 1052 行减少到 671 行 (36% 减少)**
+- `GpuVramHelper` 从 110 行压缩到 45 行 (59% 减少) - 删除 Debug 输出和未用方法
+- `Form1` 从 200 行压缩到 118 行 (41% 减少) - 删除未用控件和冗余注释
+- `ConfigManager` 从 30 行压缩到 16 行 (47% 减少) - 加入配置缓存
+- `SystemMonitor` 从 52 行压缩到 40 行 (23% 减少) - 删除 GetGpuName() 方法
+- `AudioPlayer` 从 40 行压缩到 23 行 (42% 减少) - 删除调试输出
+- **总代码量从 432 行减少到 371 行 (14% 减少)** - 专注于核心逻辑
 
 ## 监控逻辑
 
