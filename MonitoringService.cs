@@ -33,7 +33,7 @@ namespace WebUIMonitor
             string actualPath = _pathManager.GetActualMonitorPath();
             _fileMonitor = new FileMonitor(actualPath);
             _systemMonitor = new SystemMonitor();
-            _audioPlayer = new AudioPlayer(Config.GetAudioPath());
+            _audioPlayer = new AudioPlayer(new ConfigManager().GetAudioPath());
             
             // 初始化缓存数据
             _cachedData = new MonitoringData();
