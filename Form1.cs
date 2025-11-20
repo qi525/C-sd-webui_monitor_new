@@ -81,7 +81,7 @@ namespace WebUIMonitor
             // 更新日期和显卡
             lblDateTime.Text = $"日期时间: {data.DateTime}";
             lblGpuName.Text = $"显卡名称: {data.GpuName}";
-            UpdateControl(lblGpuVramUsage, pgbGpuVram, $"显存占用: {data.GpuVramUsedGB:F1} GB / 16.0 GB ({data.GpuVramPercent:F1}%)", data.GpuVramPercent);
+            UpdateControl(lblGpuVramUsage, pgbGpuVram, $"显存占用: {data.GpuVramUsedGB:F1} GB / {data.GpuVramTotalGB:F1} GB ({data.GpuVramPercent:F1}%)", data.GpuVramPercent);
             
             // 更新 CPU 和内存
             UpdateControl(lblCpuUsage, pgbCpu, $"CPU 占用: {data.CpuPercent:F1}%", data.CpuPercent);

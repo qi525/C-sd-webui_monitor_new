@@ -4,11 +4,14 @@ using System.Threading.Tasks;
 
 namespace WebUIMonitor
 {
+    /// <summary>
+    /// 中央监控服务：聚合所有硬件数据，定时发布更新
+    /// </summary>
     public class MonitoringService
     {
-        private FileMonitor _fileMonitor;
-        private SystemMonitor _systemMonitor;
-        private AudioPlayer _audioPlayer;
+        private readonly FileMonitor _fileMonitor;
+        private readonly SystemMonitor _systemMonitor;
+        private readonly AudioPlayer _audioPlayer;
         public event Action<MonitoringData> OnDataUpdated;
 
         public MonitoringService(string initialPath)
@@ -25,8 +28,7 @@ namespace WebUIMonitor
             {
                 while (true)
                 {
-                    var data = GetData();
-                    OnDataUpdated?.Invoke(data);
+                    OnDataUpdated?.Invoke(GetData());
                     await Task.Delay(500);
                 }
             });
@@ -50,7 +52,7 @@ namespace WebUIMonitor
             string path = GetMonitorPath();
             _fileMonitor.SetPath(path);
             
-            var (gpuName, usedVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
+            var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
             
@@ -62,7 +64,8 @@ namespace WebUIMonitor
                 DateTime = _systemMonitor.GetCurrentDateTime(),
                 GpuName = gpuName,
                 GpuVramUsedGB = usedVramGB,
-                GpuVramPercent = gpuSuccess ? (usedVramGB / 16.0) * 100 : 0,
+                GpuVramTotalGB = totalVramGB,
+                GpuVramPercent = (gpuSuccess && totalVramGB > 0) ? Math.Min((usedVramGB / totalVramGB) * 100, 100) : 0,
                 CpuPercent = _systemMonitor.GetCpuUsage(),
                 PhysicalMemoryTotal = physTotal,
                 PhysicalMemoryUsed = physUsed,
@@ -78,11 +81,15 @@ namespace WebUIMonitor
         }
     }
 
+    /// <summary>
+    /// 监控数据快照（GPU、CPU、内存、硬盘）
+    /// </summary>
     public class MonitoringData
     {
         public string DateTime { get; set; }
         public string GpuName { get; set; }
         public double GpuVramUsedGB { get; set; }
+        public double GpuVramTotalGB { get; set; }
         public double GpuVramPercent { get; set; }
         public double CpuPercent { get; set; }
         public double PhysicalMemoryTotal { get; set; }
