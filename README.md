@@ -1,101 +1,150 @@
-# WebUI 文件监控工具
+# WebUI 监控工具
 
-极简的 WebUI 输出文件夹监控工具，用于检测生成任务是否卡顿。
+轻量级的 Stable Diffusion WebUI 监控工具，实时监控系统资源与文件生成状态。
 
-## 功能
+## 功能特性
 
-- 📁 自动检测 WebUI 输出文件夹位置（支持 C/D/E 盘）
-- 📊 监控每日输出文件夹内的文件数量
-- 🚨 文件数量不增加时自动触发警报
-- 🔊 循环播放警报音乐（7 you.wav）
-- 🎨 简洁的 UI 显示监控状态
+- 📊 **系统监控**: 实时显示 GPU 显存、CPU、物理内存、虚拟内存占用
+- 📁 **文件监控**: 自动监控输出文件夹，检测文件数量变化
+- 🚨 **智能警报**: 30 秒内无新文件生成时触发循环音频警报
+- ⚙️ **配置驱动**: 通过 `config.json` 灵活配置监控路径
+- 🎨 **简洁 UI**: 暗色主题界面，清晰展示所有监控信息
+- 🔄 **异步架构**: 后台线程更新数据，UI 完全不阻塞
 
 ## 项目结构
 
 ```
 C#sd-webui_monitor_new/
-├── FileMonitor.cs       # 文件监控核心逻辑
-├── AudioPlayer.cs       # 音频播放控制
-├── Config.cs            # 配置和路径检测
-├── Form1.cs             # UI 窗体
-├── Program.cs           # 程序入口
-├── 7 you.wav           # 警报音乐
-├── .gitignore          # Git 忽略文件
+├── Form1.cs                    # UI 界面与事件驱动更新
+├── MonitoringService.cs        # 后台监控服务与数据聚合
+├── ConfigManager.cs            # 配置管理（读取/保存/验证）
+├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）
+├── FileMonitor.cs              # 文件数量监控与警报逻辑
+├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）
+├── AudioPlayer.cs              # 音频循环播放
+├── MonitoringPathManager.cs    # 路径计算（配置路径+日期子目录）
+├── Program.cs                  # 程序入口
+├── config.json                 # 配置文件
+├── alarm.wav                   # 警报音频
 └── C#sd-webui_monitor_new.csproj
 ```
 
-## 核心工作流程
+## 核心架构
 
 ```
-Config 检测输出路径
-    ↓
-FileMonitor 监控文件数量 (3秒检查一次)
-    ↓
-isAlarm 状态标志 (文件不增加 → true)
-    ↓
-Form1 UI 显示状态 + AudioPlayer 播放/停止警报
+ConfigManager ──读取配置──> MonitoringService
+                                ↓
+                    ┌───────────┴───────────┐
+                    ↓                       ↓
+            MonitoringPathManager      FileMonitor
+                    ↓                       ↓
+            SystemMonitor ←────────────→ AudioPlayer
+                    ↓
+            后台线程循环 (500ms)
+                    ↓
+        OnDataUpdated 事件 ──> Form1 UI 更新
 ```
 
-## 状态机
+### 关键设计
 
-| isAlarm | 含义 | UI 显示 | 音频 |
-|---------|------|--------|------|
-| false | 文件正常增长 | ✓ 正常 (绿色) | 停止 |
-| true | 文件未增加 | ⚠️ 警报 (红色) | 播放 |
+- **事件驱动**: `MonitoringService.OnDataUpdated` 事件推送数据到 UI，避免轮询阻塞
+- **后台异步**: 所有资源查询在 `Task.Run` 线程池执行，UI 线程仅负责渲染
+- **配置热更新**: 每 500ms 重新读取 `config.json`，路径变化立即生效
+- **路径智能化**: 优先监控 `配置路径\yyyy-MM-dd` 子目录，不存在则回退到配置路径
 
 ## 使用方法
 
-### 编译
-```bash
-dotnet build
+### 1. 配置
+
+编辑 `config.json`：
+```json
+{
+  "MonitoringPath": "C:\\stable-diffusion-webui\\outputs",
+  "AudioPath": "alarm.wav",
+  "AutoDetect": true
+}
 ```
 
-### 运行
-```bash
+### 2. 编译运行
+```powershell
+dotnet build -c Release
 dotnet run
 ```
 
-### 发布
-```bash
-dotnet publish -c Release -o ./publish
+### 3. 发布独立可执行文件
+```powershell
+dotnet publish -c Release -o publish
 ```
 
-## 配置
-
-输出文件夹自动检测顺序：
-1. `C:\stable-diffusion-webui\outputs`
-2. `D:\stable-diffusion-webui\outputs`
-3. `E:\stable-diffusion-webui\outputs`
-
-当天监控的文件夹格式：`outputs\yyyy-MM-dd\`
+发布后在 `publish` 文件夹中可找到可执行文件及所有依赖。
 
 ## 代码统计
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
-| Form1.cs | 94 | UI 界面 |
-| FileMonitor.cs | 64 | 核心监控 |
-| AudioPlayer.cs | 40 | 音乐播放 |
-| Config.cs | 29 | 路径配置 |
-| Program.cs | 16 | 启动入口 |
-| **总计** | **243** | - |
+| Form1.cs | 238 | UI 界面与事件驱动更新 |
+| MonitoringService.cs | 209 | 后台监控服务与数据聚合 |
+| ConfigManager.cs | 174 | 配置管理（读取/保存/验证） |
+| SystemMonitor.cs | 147 | 系统资源监控（CPU/内存/GPU） |
+| FileMonitor.cs | 107 | 文件数量监控与警报逻辑 |
+| GpuVramHelper.cs | 98 | GPU 显存查询（PowerShell） |
+| AudioPlayer.cs | 35 | 音频循环播放 |
+| MonitoringPathManager.cs | 28 | 路径计算（配置路径+日期子目录） |
+| Program.cs | 16 | 程序入口 |
+| **总计** | **1052** | 9 个核心模块 |
+
+## 监控逻辑
+
+### 警报触发条件
+- 文件数量 30 秒内未增加 → 触发警报
+- 警报状态下循环播放音频，直到文件数量增加
+
+### 路径优先级
+1. 检查 `配置路径\yyyy-MM-dd` 是否存在
+2. 存在 → 监控该日期子目录
+3. 不存在 → 监控配置的基础路径
+
+### 状态转换
+
+| 前状态 | 文件变化 | 新状态 | UI | 音频 |
+|--------|---------|--------|-----|------|
+| 正常 | 文件增加 | 正常 | ✓ 正在出图 (绿色) | 停止 |
+| 正常 | 30秒无变化 | 警报 | ⚠️ 已停止 (红色) | 循环播放 |
+| 警报 | 文件增加 | 正常 | ✓ 正在出图 (绿色) | 停止 |
 
 ## 依赖
 
 - .NET 10.0 (Windows Desktop)
 - Windows Forms
 - System.Media (SoundPlayer)
+- System.Diagnostics (PerformanceCounter)
+- System.Management (WMI)
+
+## 技术亮点
+
+- ✅ **异步非阻塞**: 所有耗时操作在后台线程执行
+- ✅ **事件驱动**: UI 订阅数据更新事件，避免轮询
+- ✅ **配置热更新**: 运行时修改 `config.json` 立即生效
+- ✅ **精简代码**: 9 个模块共 1052 行，职责清晰
+- ✅ **零外部依赖**: 仅使用 .NET BCL
+
+## 开发备注
+
+**设计理念**:
+- 单一职责原则（每个类只做一件事）
+- 事件驱动架构（数据推送而非拉取）
+- 配置即代码（所有行为由 `config.json` 控制）
+
+**性能优化**:
+- 后台线程 500ms 采样间隔（平衡实时性与性能）
+- UI 更新使用 `BeginInvoke`（异步避免死锁）
+- 文件监控 3 秒检查间隔（减少磁盘 I/O）
+
+**可扩展性**:
+- 新增监控指标：在 `MonitoringData` 添加属性
+- 新增警报条件：修改 `FileMonitor.CheckFileCount()`
+- 自定义音频行为：扩展 `AudioPlayer` 类
 
 ## 许可证
 
 MIT
-
-## 开发者备注
-
-设计理念：
-- ✅ 极简设计（仅 243 行代码）
-- ✅ 单一职责原则
-- ✅ 状态驱动架构（isAlarm 标志）
-- ✅ 无外部依赖
-
-如需修改警报检查间隔，编辑 `FileMonitor.cs` 中的 `Thread.Sleep(3000)` 值。
