@@ -12,6 +12,7 @@ namespace WebUIMonitor
         private readonly FileMonitor _fileMonitor;
         private readonly SystemMonitor _systemMonitor;
         private readonly AudioPlayer _audioPlayer;
+        private string _lastMonitorDate = "";  // 追踪上一次的监控日期（yyyy-MM-dd），用于自动检测午夜日期变化
         public event Action<MonitoringData> OnDataUpdated;
 
         public MonitoringService(string initialPath)
@@ -46,12 +47,27 @@ namespace WebUIMonitor
         {
             string basePath = ConfigManager.GetMonitoringPath();
             string todayFolder = Path.Combine(basePath, DateTime.Now.ToString("yyyy-MM-dd"));
+            
+            // 【智能回退逻辑】
+            // 1. 优先返回当前日期的子文件夹（适配Stable Diffusion默认结构）
+            // 2. 如果不存在，回退到配置的基础路径（适配没有日期子文件夹的用户）
+            // 3. 确保日期变化时UI能正确显示，同时不丢弃没有日期子文件夹的用户
             return Directory.Exists(todayFolder) ? todayFolder : basePath;
         }
 
         private MonitoringData GetData()
         {
+            string currentDate = DateTime.Now.ToString("yyyy-MM-dd");
             string path = GetMonitorPath();
+            
+            // 【核心修复】基于日期字符串（yyyy-MM-dd）检测日期变化，而不是路径
+            // 保证100%捕获午夜日期变化，即使路径相同也会重置
+            if (currentDate != _lastMonitorDate)
+            {
+                _fileMonitor.Reset();  // 重置文件监控状态
+                _lastMonitorDate = currentDate;  // 更新为当前日期
+            }
+            
             _fileMonitor.SetPath(path);
             
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();

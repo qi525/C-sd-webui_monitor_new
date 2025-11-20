@@ -15,6 +15,14 @@ namespace WebUIMonitor
 
         public void SetPath(string path) => _path = path;
 
+        /// <summary>重置文件监控状态（用于日期变化时清除旧数据）</summary>
+        public void Reset()
+        {
+            _lastFileCount = -1;
+            _lastChangeTime = DateTime.Now;
+            _isAlarm = false;
+        }
+
         public void Start() => _ = Task.Run(() => { _isRunning = true; while (_isRunning) { CheckFileCount(); Thread.Sleep(3000); } });
 
         private void CheckFileCount()
