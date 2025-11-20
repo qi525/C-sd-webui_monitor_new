@@ -15,14 +15,16 @@
 
 ```
 C#sd-webui_monitor_new/
-├── Form1.cs                    # UI 界面与事件驱动更新 (118 行)
-├── MonitoringService.cs        # 后台监控服务与数据聚合 (80 行)
-├── ConfigManager.cs            # 配置管理 - 静态工具类 (16 行)
-├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）(40 行)
-├── FileMonitor.cs              # 文件数量监控与警报逻辑 (35 行)
-├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）(45 行)
-├── AudioPlayer.cs              # 音频循环播放 (23 行)
-├── Program.cs                  # 程序入口 (14 行)
+├── Form1.cs                    # UI 界面与事件驱动更新 (138 行)
+├── GpuVramHelper.cs            # GPU 显存查询（PowerShell/DXGI）(153 行)
+├── MonitoringService.cs        # 后台监控服务与数据聚合 (106 行)
+├── SystemMonitor.cs            # 系统资源监控（CPU/内存/虚拟内存/网络）(108 行)
+├── FileMonitor.cs              # 文件数量监控与警报逻辑 (28 行)
+├── ColoredProgressBar.cs       # 自定义彩色进度条 (51 行)
+├── NvmlHelper.cs               # GPU 显存查询备选方案（NVML）(55 行)
+├── AudioPlayer.cs              # 音频循环播放 (15 行)
+├── ConfigManager.cs            # 配置管理 - 静态工具类 (21 行)
+├── Program.cs                  # 程序入口 (16 行)
 ├── config.json                 # 配置文件
 ├── alarm.wav                   # 警报音频
 └── C#sd-webui_monitor_new.csproj
@@ -80,27 +82,32 @@ dotnet publish -c Release -o publish
 
 ## 代码统计
 
-| 文件 | 行数 | 功能 |
-|------|------|------|
-| Form1.cs | 118 | UI 界面与事件驱动更新 |
-| MonitoringService.cs | 80 | 后台监控服务与数据聚合 |
-| GpuVramHelper.cs | 45 | GPU 显存查询（PowerShell） |
-| FileMonitor.cs | 35 | 文件数量监控与警报逻辑 |
-| SystemMonitor.cs | 40 | 系统资源监控（CPU/内存/GPU）|
-| AudioPlayer.cs | 23 | 音频循环播放 |
-| ConfigManager.cs | 16 | 静态配置管理（2 个方法） |
-| Program.cs | 14 | 程序入口 |
-| **总计** | **371** | **8 个核心模块** |
+| 文件 | 行数 | 压缩难度 | 功能 |
+|------|------|---------|------|
+| Form1.cs | 138 | ⭐⭐⭐ 高 | UI 界面与事件驱动更新 |
+| GpuVramHelper.cs | 153 | ⭐⭐⭐⭐ 很高 | GPU 显存查询（PowerShell/DXGI） |
+| MonitoringService.cs | 106 | ⭐⭐ 中 | 后台监控服务与数据聚合 |
+| SystemMonitor.cs | 108 | ⭐⭐ 中 | 系统资源监控（CPU/内存/虚拟内存/网络） |
+| NvmlHelper.cs | 55 | ⭐⭐⭐ 高 | GPU 显存查询（NVML 备选方案） |
+| ColoredProgressBar.cs | 51 | ⭐ 低 | 自定义彩色进度条 |
+| FileMonitor.cs | 28 | ⭐ 低 | 文件数量监控与警报逻辑 |
+| ConfigManager.cs | 21 | ⭐ 低 | 配置管理 - 静态工具类 |
+| Program.cs | 16 | ⭐ 低 | 程序入口 |
+| AudioPlayer.cs | 15 | ⭐ 低 | 音频循环播放 |
+| **总计** | **691** | **✅ 平衡** | **10 个核心模块** |
 
-**代码简化成果**:
-- 删除 `MonitoringPathManager.cs` (28 行) - 逻辑合并到 `MonitoringService`
-- 删除 `Config.cs` - 合并到 `ConfigManager.cs`
-- `GpuVramHelper` 从 110 行压缩到 45 行 (59% 减少) - 删除 Debug 输出和未用方法
-- `Form1` 从 200 行压缩到 118 行 (41% 减少) - 删除未用控件和冗余注释
-- `ConfigManager` 从 30 行压缩到 16 行 (47% 减少) - 加入配置缓存
-- `SystemMonitor` 从 52 行压缩到 40 行 (23% 减少) - 删除 GetGpuName() 方法
-- `AudioPlayer` 从 40 行压缩到 23 行 (42% 减少) - 删除调试输出
-- **总代码量从 432 行减少到 371 行 (14% 减少)** - 专注于核心逻辑
+**压缩难度说明**:
+- ⭐ 低：简单工具类，逻辑清晰，已高度优化
+- ⭐⭐ 中：有冗余空间，可以合并函数或简化逻辑
+- ⭐⭐⭐ 高：核心逻辑复杂，每一行都有用途，压缩需谨慎
+- ⭐⭐⭐⭐ 很高：涉及 PowerShell、WMI、DXGI 等外部 API，优化空间小
+
+**代码演进记录**:
+- GpuVramHelper: 从 275 行 → 115 行 → 153 行（集成 Counter #4 #8 与 DXGI）
+- Form1: 从 200 行 → 138 行（集成 7 个彩色进度条与网络监控）
+- SystemMonitor: 从 52 行 → 108 行（新增网络速度监控）
+- ColoredProgressBar: 新增，51 行（解决 ProgressBar 颜色问题）
+- **总体代码量稳定在 690 行左右，保持核心功能与可读性的平衡**
 
 ## 监控逻辑
 
