@@ -6,7 +6,7 @@ using System.ComponentModel;
 namespace WebUIMonitor
 {
     /// <summary>
-    /// 支持真正改变颜色的进度条（解决标准ProgressBar颜色问题）
+    /// 支持动态颜色变化的自定义进度条（解决标准ProgressBar在Windows Vista+无法改变颜色的问题）
     /// </summary>
     public class ColoredProgressBar : ProgressBar
     {
@@ -18,39 +18,35 @@ namespace WebUIMonitor
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
         }
 
+        /// <summary>获取或设置进度条填充颜色</summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color BarColor
         {
-            get { return _barColor; }
-            set 
-            { 
+            get => _barColor;
+            set
+            {
                 if (_barColor != value)
                 {
                     _barColor = value;
                     Invalidate();
-                    Refresh();  // 强制立即重绘
                 }
             }
         }
 
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            e.Graphics.Clear(BackColor);
-        }
+        protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(BackColor);
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            Rectangle rect = ClientRectangle;
+            var rect = ClientRectangle;
             
             // 绘制背景
             e.Graphics.FillRectangle(new SolidBrush(SystemColors.Control), rect);
             
-            // 绘制进度条
+            // 绘制进度条填充
             if (Maximum > 0)
             {
                 int barWidth = (int)((double)Value / Maximum * rect.Width);
-                Rectangle barRect = new Rectangle(rect.X, rect.Y, barWidth, rect.Height);
-                e.Graphics.FillRectangle(new SolidBrush(_barColor), barRect);
+                e.Graphics.FillRectangle(new SolidBrush(_barColor), rect.X, rect.Y, barWidth, rect.Height);
             }
             
             // 绘制边框
