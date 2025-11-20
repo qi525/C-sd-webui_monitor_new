@@ -7,54 +7,34 @@ namespace WebUIMonitor
 {
     public class AudioPlayer
     {
-        private SoundPlayer? _player;
-        private bool _isPlaying = false;
+        private readonly SoundPlayer? _player;
+        private bool _isPlaying;
 
-        public AudioPlayer(string audioPath)
+        public AudioPlayer(string? audioPath)
         {
-            if (File.Exists(audioPath))
-            {
-                try
-                {
-                    _player = new SoundPlayer(audioPath);
-                    Console.WriteLine($"✓ 音频文件已加载: {audioPath}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"✗ 音频加载失败: {ex.Message}");
-                }
-            }
-            else
+            if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath))
             {
                 Console.WriteLine($"✗ 音频文件不存在: {audioPath}");
+                return;
             }
+
+            _player = new SoundPlayer(audioPath);
+            Console.WriteLine($"✓ 音频文件已加载: {audioPath}");
         }
 
         public void Play()
         {
             if (_player == null || _isPlaying) return;
+            _isPlaying = true;
+            Console.WriteLine("▶ 开始循环播放音频");
+            _player.PlayLooping();
+        }
 
-            try
-            {
-                _isPlaying = true;
-                Console.WriteLine("▶ 开始循环播放音频");
-                _player.PlayLooping();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"✗ 播放失败: {ex.Message}");
-                _isPlaying = false;
-            }
-        }        public void Stop()
+        public void Stop()
         {
             if (_player == null) return;
-            
-            try
-            {
-                _player.Stop();
-                _isPlaying = false;
-            }
-            catch { }
+            _player.Stop();
+            _isPlaying = false;
         }
     }
 }
