@@ -15,19 +15,15 @@ namespace WebUIMonitor
 
         public void SetPath(string path) => _path = path;
 
-        public void Start()
-        {
-            _isRunning = true;
-            _ = Task.Run(() => { while (_isRunning) { CheckFileCount(); Thread.Sleep(3000); } });
-        }
+        public void Start() => _ = Task.Run(() => { _isRunning = true; while (_isRunning) { CheckFileCount(); Thread.Sleep(3000); } });
 
         private void CheckFileCount()
         {
             if (string.IsNullOrEmpty(_path) || !Directory.Exists(_path)) { _lastFileCount = 0; return; }
             int count = Directory.GetFiles(_path).Length;
             if (_lastFileCount == -1) { _lastFileCount = count; _lastChangeTime = DateTime.Now; return; }
-            if (count > _lastFileCount) { _lastFileCount = count; _lastChangeTime = DateTime.Now; _isAlarm = false; }
-            else _isAlarm = (int)(DateTime.Now - _lastChangeTime).TotalSeconds >= 30;
+            if (count > _lastFileCount) { _lastFileCount = count; _lastChangeTime = DateTime.Now; _isAlarm = false; return; }
+            _isAlarm = (int)(DateTime.Now - _lastChangeTime).TotalSeconds >= 30;
         }
 
         public bool IsAlarm => _isAlarm;

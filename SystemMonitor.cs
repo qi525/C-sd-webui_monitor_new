@@ -9,13 +9,7 @@ namespace WebUIMonitor
         private PerformanceCounter _cpuCounter, _committedBytesCounter, _commitLimitCounter;
         private const long ONE_GB = 1024L * 1024L * 1024L;
 
-        public SystemMonitor()
-        {
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _committedBytesCounter = new PerformanceCounter("Memory", "Committed Bytes", true);
-            _commitLimitCounter = new PerformanceCounter("Memory", "Commit Limit", true);
-            _ = _cpuCounter.NextValue(); _ = _committedBytesCounter.NextValue(); _ = _commitLimitCounter.NextValue();
-        }
+        public SystemMonitor() { _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total"); _committedBytesCounter = new PerformanceCounter("Memory", "Committed Bytes", true); _commitLimitCounter = new PerformanceCounter("Memory", "Commit Limit", true); _cpuCounter.NextValue(); _committedBytesCounter.NextValue(); _commitLimitCounter.NextValue(); }
 
         public string GetCurrentDateTime() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public float GetCpuUsage() => _cpuCounter.NextValue();

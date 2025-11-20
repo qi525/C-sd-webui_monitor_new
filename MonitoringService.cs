@@ -49,16 +49,16 @@ namespace WebUIMonitor
         {
             string path = GetMonitorPath();
             _fileMonitor.SetPath(path);
-
+            
             var (gpuName, usedVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
-
+            
             bool isAlarm = _fileMonitor.IsAlarm;
             if (isAlarm) _audioPlayer.Play(); else _audioPlayer.Stop();
-
-            return new MonitoringData
-            {
+            
+            return new MonitoringData 
+            { 
                 DateTime = _systemMonitor.GetCurrentDateTime(),
                 GpuName = gpuName,
                 GpuVramUsedGB = usedVramGB,
@@ -73,7 +73,7 @@ namespace WebUIMonitor
                 VirtualMemoryText = vmText,
                 FileCount = _fileMonitor.FileCount,
                 IsAlarm = isAlarm,
-                TodayMonitoringPath = path
+                TodayMonitoringPath = path 
             };
         }
     }

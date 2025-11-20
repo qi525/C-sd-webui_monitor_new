@@ -7,30 +7,13 @@ namespace WebUIMonitor
 {
     public class AudioPlayer
     {
-        private readonly SoundPlayer? _player;
+        private SoundPlayer? _player;
         private bool _isPlaying;
 
-        public AudioPlayer(string? audioPath)
-        {
-            if (!string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath))
-                _player = new SoundPlayer(audioPath);
-        }
+        public AudioPlayer(string? audioPath) => _player = (!string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath)) ? new SoundPlayer(audioPath) : null;
 
-        public void Play()
-        {
-            if (_player != null && !_isPlaying)
-            {
-                _isPlaying = true;
-                _player.PlayLooping();
-            }
-        }
+        public void Play() { if (_player != null && !_isPlaying) { _isPlaying = true; _player.PlayLooping(); } }
 
-        public void Stop()
-        {
-            if (_player == null) return;
-            _player.Stop();
-            _isPlaying = false;
-        }
+        public void Stop() { if (_player != null) { _player.Stop(); _isPlaying = false; } }
     }
 }
-
