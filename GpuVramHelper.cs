@@ -1,205 +1,166 @@
 using System;
 using System.Diagnostics;
 using System.Management;
+using System.Threading.Tasks;
 using SharpDX.DXGI;
 
 namespace WebUIMonitor
 {
-    /// <summary>
-    /// GPU 显存信息获取（支持 NVIDIA/AMD/Intel）
-    /// 降级链：NVML → DXGI → WMI → 性能计数器 → PowerShell
-    /// </summary>
     public static class GpuVramHelper
     {
         private const long ONE_GB = 1024L * 1024L * 1024L;
+        private const double BytesToGB = 1024.0 * 1024.0 * 1024.0;
         private static double? _totalVramGB;
-        private static PerformanceCounter _gpuMemory;
+        private static double _cachedDedicatedUsedGB = 0;
+        private static double _cachedSharedUsedGB = 0;
+        private static readonly object _lockObject = new object();
 
-        /// <summary>
-        /// 获取主 GPU 名称、实时占用、总显存（优先级降级）
-        /// </summary>
         public static (string gpuName, double usedVramGB, double totalVramGB, bool success) GetGpuVramInfo()
         {
-            // 方案 1：NVML（NVIDIA/AMD 原生支持）
-            var (nvmlName, nvmlUsed, nvmlTotal, nvmlSuccess) = NvmlHelper.GetGpuMemory();
-            if (nvmlSuccess && nvmlTotal > 0)
-                return (nvmlName, nvmlUsed, nvmlTotal, true);
-
-            // 方案 2：DXGI（Windows 原生，获取总显存）
-            try
-            {
-                var (gpuName, totalVram) = GetGpuInfoFromDxgi();
-                _totalVramGB ??= totalVram;
-                double usedVram = GetUsedVram();
-                return (gpuName, Math.Max(0, usedVram), totalVram, true);
-            }
-            catch
-            {
-                return ("Unknown GPU", 0, _totalVramGB ?? 0, false);
-            }
+            string name = GetGpuName();
+            double totalVram = GetTotalVramGB();
+            double usedVram = GetUsedVramGB();
+            return (name, usedVram, totalVram, totalVram > 0);
         }
 
-        /// <summary>
-        /// 获取主 GPU 名称（纯名称，无显存信息）
-        /// </summary>
-        public static string GetGpuName()
+        private static double GetTotalVramGB()
         {
-            // 优先 NVML
-            var (nvmlName, _, _, success) = NvmlHelper.GetGpuMemory();
-            if (success && nvmlName != "N/A") return nvmlName;
+            if (_totalVramGB.HasValue) return _totalVramGB.Value;
+            
+            var (_, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
+            double total = Math.Max(dedicatedGB, sharedGB);
+            if (total > 0) { _totalVramGB = total; return total; }
+            return 0;
+        }
 
-            // 降级 DXGI
+        private static double GetUsedVramGB()
+        {
             try
             {
-                var (dxgiName, _) = GetGpuInfoFromDxgi();
-                if (dxgiName != "Unknown GPU") return dxgiName;
+                using (var searcher = new ManagementObjectSearcher("select CurrentUsage from Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory"))
+                {
+                    long total = 0;
+                    foreach (ManagementObject obj in searcher.Get())
+                        if (ulong.TryParse(obj["CurrentUsage"]?.ToString() ?? "0", out ulong val))
+                            total += (long)val;
+                    if (total > 0) return Math.Max(0, total / (double)ONE_GB);
+                }
             }
             catch { }
+            return 0;
+        }
 
-            // 降级 WMI
+        public static string GetGpuName()
+        {
             try
             {
                 using (var searcher = new ManagementObjectSearcher("select Name from Win32_VideoController"))
                 {
                     foreach (ManagementObject obj in searcher.Get())
-                        return obj["Name"]?.ToString() ?? "Unknown GPU";
+                    {
+                        string name = obj["Name"]?.ToString();
+                        if (!string.IsNullOrEmpty(name) && name != "Unknown GPU") return name;
+                    }
                 }
             }
             catch { }
-
             return "Unknown GPU";
         }
 
-        /// <summary>
-        /// 获取 GPU 品牌（NVIDIA/AMD/Intel/Unknown）
-        /// </summary>
-        public static string GetGpuBrand()
+        public static double GetGpuDedicatedMemoryGB()
         {
-            string fullName = GetGpuName();
-            if (fullName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)) return "NVIDIA";
-            if (fullName.Contains("GeForce", StringComparison.OrdinalIgnoreCase)) return "NVIDIA";
-            if (fullName.Contains("AMD", StringComparison.OrdinalIgnoreCase)) return "AMD";
-            if (fullName.Contains("Radeon", StringComparison.OrdinalIgnoreCase)) return "AMD";
-            if (fullName.Contains("Intel", StringComparison.OrdinalIgnoreCase)) return "Intel";
-            if (fullName.Contains("Arc", StringComparison.OrdinalIgnoreCase)) return "Intel";
-            return "Unknown";
+            var (_, dedicated, _) = GetGpuMemoryFromDxgi();
+            return dedicated;
+        }
+
+        public static double GetGpuSharedMemoryGB()
+        {
+            var (_, _, shared) = GetGpuMemoryFromDxgi();
+            return shared;
         }
 
         /// <summary>
-        /// 获取 GPU 型号（去除品牌信息）
-        /// 例如："Intel(R) Arc(TM) A770 Graphics" → "Arc A770"
+        /// 第4个计数器：GPU 适配器显存 - 专用使用（返回缓存值）
         /// </summary>
-        public static string GetGpuModel()
+        public static double GetGpuAdapterDedicatedUsedGB()
         {
-            string fullName = GetGpuName();
-            if (string.IsNullOrEmpty(fullName) || fullName == "Unknown GPU") return "Unknown";
-
-            // 移除品牌标记和多余符号
-            string model = fullName
-                .Replace("Intel(R)", "").Replace("Intel", "")
-                .Replace("NVIDIA", "").Replace("(TM)", "").Replace("(R)", "")
-                .Replace("AMD", "").Replace("Radeon", "")
-                .Trim();
-
-            return string.IsNullOrWhiteSpace(model) ? "Unknown" : model;
+            lock (_lockObject) { return _cachedDedicatedUsedGB; }
         }
 
         /// <summary>
-        /// 方案 2：DXGI 获取 GPU 名称和总显存（无硬编码）
+        /// 第8个计数器：GPU 适配器显存 - 共享使用（返回缓存值）
         /// </summary>
-        private static (string name, double totalGB) GetGpuInfoFromDxgi()
+        public static double GetGpuAdapterSharedUsedGB()
         {
-            using (var factory = new Factory1())
+            lock (_lockObject) { return _cachedSharedUsedGB; }
+        }
+
+        /// <summary>
+        /// 后台线程调用：更新GPU显存缓存值（异步非阻塞）
+        /// </summary>
+        public static void UpdateGpuMemoryCacheAsync()
+        {
+            Task.Run(() =>
             {
-                if (factory.GetAdapterCount1() > 0)
+                try
                 {
-                    using (var adapter = factory.GetAdapter1(0))
-                    {
-                        var desc = adapter.Description1;
-                        double gb = desc.DedicatedVideoMemory > 0 
-                            ? desc.DedicatedVideoMemory / (double)ONE_GB 
-                            : 0;
-                        return (desc.Description ?? "Unknown GPU", gb);
-                    }
-                }
-            }
-            return ("Unknown GPU", 0);
-        }
-
-        /// <summary>
-        /// 获取实时显存占用（WMI → 性能计数器 → PowerShell）
-        /// </summary>
-        private static double GetUsedVram()
-        {
-            try
-            {
-                long total = 0;
-                // 方案 2a：WMI GPU 进程显存
-                using (var searcher = new ManagementObjectSearcher(
-                    "select CurrentUsage from Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory"))
-                {
-                    var results = searcher.Get();
-                    if (results.Count == 0) return GetUsedVramCounter();
+                    double dedicated = QueryCounterValue("\\GPU Adapter Memory(*)\\Dedicated Usage");
+                    double shared = QueryCounterValue("\\GPU Adapter Memory(*)\\Shared Usage");
                     
-                    foreach (ManagementObject obj in results)
+                    lock (_lockObject)
                     {
-                        if (ulong.TryParse(obj["CurrentUsage"]?.ToString() ?? "0", out ulong val))
-                            total += (long)val;
+                        _cachedDedicatedUsedGB = dedicated;
+                        _cachedSharedUsedGB = shared;
                     }
                 }
-                return total > 0 ? total / (double)ONE_GB : GetUsedVramCounter();
-            }
-            catch { return GetUsedVramCounter(); }
+                catch { }
+            });
         }
 
-        /// <summary>
-        /// 方案 2b：Windows 性能计数器（GPU Memory）
-        /// </summary>
-        private static double GetUsedVramCounter()
+        private static double QueryCounterValue(string counterPath)
         {
             try
             {
-                _gpuMemory ??= new PerformanceCounter("GPU Memory", "Local", "_Total", true);
-                _gpuMemory.NextValue();  // 跳过第一次返回值（总是 0）
-                float val = _gpuMemory.NextValue();
-                return val > 0 ? val / 1024.0 : GetUsedVramFromPowerShell();
-            }
-            catch { return GetUsedVramFromPowerShell(); }
-        }
+                var command = $"Get-Counter -Counter '{counterPath}' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue | " +
+                              "Select-Object -ExpandProperty CounterSamples | Select-Object -ExpandProperty CookedValue | " +
+                              "Measure-Object -Sum | Select-Object -ExpandProperty Sum";
 
-        /// <summary>
-        /// 方案 2c：PowerShell Get-Counter（最后的救命稻草）
-        /// 通过 GPU Process Memory 性能计数器求和
-        /// </summary>
-        private static double GetUsedVramFromPowerShell()
-        {
-            try
-            {
-                string psCommand = @"powershell -NoProfile -Command " +
-                    @"""((Get-Counter '\GPU Process Memory(*)\Local Usage' -ErrorAction SilentlyContinue).CounterSamples | " +
-                    @"Select-Object -ExpandProperty CookedValue | Measure-Object -Sum).Sum""";
-
-                var psi = new System.Diagnostics.ProcessStartInfo
+                using (var p = new Process())
                 {
-                    FileName = "cmd.exe",
-                    Arguments = $"/c {psCommand}",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8
-                };
-
-                using (var process = System.Diagnostics.Process.Start(psi))
-                {
-                    if (process == null) return 0;
-                    process.WaitForExit(5000);
-                    string output = process.StandardOutput.ReadToEnd().Trim();
-                    return string.IsNullOrWhiteSpace(output) ? 0 : 
-                        (double.TryParse(output, out double bytes) ? bytes / ONE_GB : 0);
+                    p.StartInfo.FileName = "powershell";
+                    p.StartInfo.Arguments = $"-NoProfile -Command \"{command}\"";
+                    p.StartInfo.UseShellExecute = false;
+                    p.StartInfo.RedirectStandardOutput = true;
+                    p.StartInfo.CreateNoWindow = true;
+                    p.Start();
+                    if (p.WaitForExit(5000) && double.TryParse(p.StandardOutput.ReadToEnd().Trim(), out double bytes) && bytes > 0)
+                        return Math.Round(bytes / BytesToGB, 2);
                 }
             }
-            catch { return 0; }
+            catch { }
+            return 0;
+        }
+
+        private static (string name, double dedicatedGB, double sharedGB) GetGpuMemoryFromDxgi()
+        {
+            try
+            {
+                using (var factory = new Factory1())
+                {
+                    if (factory.GetAdapterCount1() > 0)
+                    {
+                        using (var adapter = factory.GetAdapter1(0))
+                        {
+                            var desc = adapter.Description1;
+                            double dedicatedGB = (double)desc.DedicatedVideoMemory / ONE_GB;
+                            double sharedGB = (double)desc.SharedSystemMemory / ONE_GB;
+                            return (desc.Description ?? "Unknown GPU", dedicatedGB, sharedGB);
+                        }
+                    }
+                }
+            }
+            catch { }
+            return ("Unknown GPU", 0, 0);
         }
     }
 }

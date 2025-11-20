@@ -28,6 +28,8 @@ namespace WebUIMonitor
             {
                 while (true)
                 {
+                    GpuVramHelper.UpdateGpuMemoryCacheAsync(); // 后台更新GPU缓存（非阻塞）
+                    _systemMonitor.UpdateNetworkSpeedCacheAsync(); // 后台更新网络速度缓存（非阻塞）
                     OnDataUpdated?.Invoke(GetData());
                     await Task.Delay(500);
                 }
@@ -55,6 +57,7 @@ namespace WebUIMonitor
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
+            var (downloadMbps, uploadMbps) = _systemMonitor.GetNetworkSpeed();
             
             bool isAlarm = _fileMonitor.IsAlarm;
             if (isAlarm) _audioPlayer.Play(); else _audioPlayer.Stop();
@@ -62,7 +65,7 @@ namespace WebUIMonitor
             return new MonitoringData 
             { 
                 DateTime = _systemMonitor.GetCurrentDateTime(),
-                GpuName = gpuName,
+                GpuName = GpuVramHelper.GetGpuName(),
                 GpuVramUsedGB = usedVramGB,
                 GpuVramTotalGB = totalVramGB,
                 GpuVramPercent = (gpuSuccess && totalVramGB > 0) ? Math.Min((usedVramGB / totalVramGB) * 100, 100) : 0,
@@ -74,6 +77,8 @@ namespace WebUIMonitor
                 VirtualMemoryUsed = vmUsed,
                 VirtualMemoryPercent = vmPercent,
                 VirtualMemoryText = vmText,
+                DownloadMbps = downloadMbps,
+                UploadMbps = uploadMbps,
                 FileCount = _fileMonitor.FileCount,
                 IsAlarm = isAlarm,
                 TodayMonitoringPath = path 
@@ -99,6 +104,8 @@ namespace WebUIMonitor
         public double VirtualMemoryUsed { get; set; }
         public double VirtualMemoryPercent { get; set; }
         public string VirtualMemoryText { get; set; }
+        public double DownloadMbps { get; set; }
+        public double UploadMbps { get; set; }
         public int FileCount { get; set; }
         public bool IsAlarm { get; set; }
         public string TodayMonitoringPath { get; set; }
