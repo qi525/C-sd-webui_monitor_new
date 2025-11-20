@@ -29,23 +29,9 @@ namespace WebUIMonitor
         public Form1()
         {
             InitializeUI();
-            
-            // 从配置文件加载路径
-            var configManager = new ConfigManager();
-            string initialPath = configManager.GetMonitoringPath();
-            
-            // 如果路径不存在，检查后会显示错误提示
-            // 但我们仍然继续启动服务（使用配置中的路径），
-            // 这样用户修改 config.json 后程序才能正常工作
-            
-            // 创建服务
-            _service = new MonitoringService(initialPath);
-            
-            // 订阅数据更新事件（异步回调，在UI线程上更新）
+            _service = new MonitoringService(ConfigManager.GetMonitoringPath());
             _service.OnDataUpdated += OnMonitoringDataUpdated;
-            
             _service.Start();
-            
             StartUpdateTimer();
         }
 
@@ -73,107 +59,23 @@ namespace WebUIMonitor
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Font = new Font("Arial", 11);
 
-            int yPos = 15;
-            const int labelHeight = 25;
-            const int labelWidth = 660;
-
-            // 日期时间
-            lblDateTime = CreateLabel("日期时间: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-
-            // GPU 名称
-            lblGpuName = CreateLabel("显卡名称: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-
-            // GPU 显存使用
-            lblGpuVramUsage = CreateLabel("显存占用: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-
-            // GPU 显存进度条
-            pgbGpuVram = new ProgressBar
-            {
-                Location = new Point(15, yPos),
-                Size = new Size(660, 20),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                ForeColor = Color.Green
-            };
-            this.Controls.Add(pgbGpuVram);
-            yPos += 25;
-
-            // CPU 占用
-            lblCpuUsage = CreateLabel("CPU 占用: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-            
-            pgbCpu = new ProgressBar
-            {
-                Location = new Point(15, yPos),
-                Size = new Size(660, 20),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                ForeColor = Color.Green
-            };
-            this.Controls.Add(pgbCpu);
-            yPos += 25;
-
-            // 物理内存占用
-            lblMemoryUsage = CreateLabel("内存占用: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-            
-            pgbMemory = new ProgressBar
-            {
-                Location = new Point(15, yPos),
-                Size = new Size(660, 20),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                ForeColor = Color.Green
-            };
-            this.Controls.Add(pgbMemory);
-            yPos += 25;
-
-            // 虚拟内存占用
-            lblVirtualMemoryUsage = CreateLabel("虚拟内存占用: 加载中...", 15, yPos, labelWidth);
-            yPos += labelHeight + 5;
-            
-            pgbVirtualMemory = new ProgressBar
-            {
-                Location = new Point(15, yPos),
-                Size = new Size(660, 20),
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                ForeColor = Color.Green
-            };
-            this.Controls.Add(pgbVirtualMemory);
-            yPos += 25;
-
-            // 分割线
-            var separator = new Label
-            {
-                Location = new Point(15, yPos),
-                Size = new Size(660, 2),
-                BackColor = Color.Gray
-            };
-            this.Controls.Add(separator);
-            yPos += 10;
-
-            // 文件数
-            lblFileCount = CreateLabel("文件数: 0", 15, yPos, labelWidth);
-            yPos += labelHeight + 10;
-
-            // 状态标签
-            lblStatus = CreateLabel("✓ 正在出图", 15, yPos, labelWidth, Color.Green, FontStyle.Bold, 12);
-            yPos += labelHeight + 5;
-
-            // 监控文件夹位置标签
-            lblMonitorPath = CreateLabel("目前监控文件夹位置: 加载中...", 15, yPos, labelWidth, Color.White, FontStyle.Regular, 10);
-            yPos += labelHeight + 5;
-
-            // 警报状态
-            lblAlarmStatus = CreateLabel("", 15, yPos, labelWidth, Color.Red, FontStyle.Bold, 12);
+            int y = 15;
+            lblDateTime = AddLabel("日期时间: 加载中...", ref y);
+            lblGpuName = AddLabel("显卡名称: 加载中...", ref y);
+            lblGpuVramUsage = AddLabel("显存占用: 加载中...", ref y);
+            pgbGpuVram = AddProgressBar(ref y);
+            lblCpuUsage = AddLabel("CPU 占用: 加载中...", ref y);
+            pgbCpu = AddProgressBar(ref y);
+            lblMemoryUsage = AddLabel("内存占用: 加载中...", ref y);
+            pgbMemory = AddProgressBar(ref y);
+            lblVirtualMemoryUsage = AddLabel("虚拟内存占用: 加载中...", ref y);
+            pgbVirtualMemory = AddProgressBar(ref y);
+            Controls.Add(new Label { Location = new Point(15, y), Size = new Size(660, 2), BackColor = Color.Gray });
+            y += 10;
+            lblFileCount = AddLabel("文件数: 0", ref y, 10);
+            lblStatus = AddLabel("✓ 正在出图", ref y, 5, Color.Green, FontStyle.Bold, 12);
+            lblMonitorPath = AddLabel("目前监控文件夹位置: 加载中...", ref y, 5, Color.White, FontStyle.Regular, 10);
+            lblAlarmStatus = AddLabel("", ref y, 0, Color.Red, FontStyle.Bold, 12);
         }
 
         private Label CreateLabel(string text, int x, int y, int width, 
@@ -190,6 +92,37 @@ namespace WebUIMonitor
             };
             this.Controls.Add(label);
             return label;
+        }
+
+        private Label AddLabel(string text, ref int y, int spacing = 5, Color? color = null, FontStyle style = FontStyle.Regular, int size = 11)
+        {
+            var lbl = new Label
+            {
+                Text = text,
+                Location = new Point(15, y),
+                Size = new Size(660, 25),
+                AutoSize = false,
+                Font = new Font("Arial", size, style),
+                ForeColor = color ?? Color.White
+            };
+            Controls.Add(lbl);
+            y += 25 + spacing;
+            return lbl;
+        }
+
+        private ProgressBar AddProgressBar(ref int y)
+        {
+            var pb = new ProgressBar
+            {
+                Location = new Point(15, y),
+                Size = new Size(660, 20),
+                Minimum = 0,
+                Maximum = 100,
+                ForeColor = Color.Green
+            };
+            Controls.Add(pb);
+            y += 25;
+            return pb;
         }
 
         private void StartUpdateTimer()

@@ -15,15 +15,14 @@
 
 ```
 C#sd-webui_monitor_new/
-├── Form1.cs                    # UI 界面与事件驱动更新
-├── MonitoringService.cs        # 后台监控服务与数据聚合
-├── ConfigManager.cs            # 配置管理（读取/保存/验证）
-├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）
-├── FileMonitor.cs              # 文件数量监控与警报逻辑
-├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）
-├── AudioPlayer.cs              # 音频循环播放
-├── MonitoringPathManager.cs    # 路径计算（配置路径+日期子目录）
-├── Program.cs                  # 程序入口
+├── Form1.cs                    # UI 界面与事件驱动更新 (181 行)
+├── MonitoringService.cs        # 后台监控服务与数据聚合 (190 行)
+├── ConfigManager.cs            # 配置管理 - 静态工具类 (26 行)
+├── SystemMonitor.cs            # 系统资源监控（CPU/内存/GPU）(54 行)
+├── FileMonitor.cs              # 文件数量监控与警报逻辑 (71 行)
+├── GpuVramHelper.cs            # GPU 显存查询（PowerShell）(98 行)
+├── AudioPlayer.cs              # 音频循环播放 (35 行)
+├── Program.cs                  # 程序入口 (16 行)
 ├── config.json                 # 配置文件
 ├── alarm.wav                   # 警报音频
 └── C#sd-webui_monitor_new.csproj
@@ -32,17 +31,17 @@ C#sd-webui_monitor_new/
 ## 核心架构
 
 ```
-ConfigManager ──读取配置──> MonitoringService
-                                ↓
-                    ┌───────────┴───────────┐
-                    ↓                       ↓
-            MonitoringPathManager      FileMonitor
-                    ↓                       ↓
-            SystemMonitor ←────────────→ AudioPlayer
-                    ↓
-            后台线程循环 (500ms)
-                    ↓
-        OnDataUpdated 事件 ──> Form1 UI 更新
+ConfigManager (静态) ──读取配置──> MonitoringService
+                                      ↓
+                          ┌───────────┴───────────┐
+                          ↓                       ↓
+                  GetActualMonitorPath()     FileMonitor
+                          ↓                       ↓
+                  SystemMonitor ←────────────→ AudioPlayer
+                          ↓
+                  后台线程循环 (500ms)
+                          ↓
+              OnDataUpdated 事件 ──> Form1 UI 更新
 ```
 
 ### 关键设计
@@ -51,6 +50,7 @@ ConfigManager ──读取配置──> MonitoringService
 - **后台异步**: 所有资源查询在 `Task.Run` 线程池执行，UI 线程仅负责渲染
 - **配置热更新**: 每 500ms 重新读取 `config.json`，路径变化立即生效
 - **路径智能化**: 优先监控 `配置路径\yyyy-MM-dd` 子目录，不存在则回退到配置路径
+- **极简抽象**: 删除中间管理层，单函数控制路径获取，静态配置管理
 
 ## 使用方法
 
@@ -82,16 +82,23 @@ dotnet publish -c Release -o publish
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
-| Form1.cs | 238 | UI 界面与事件驱动更新 |
-| MonitoringService.cs | 209 | 后台监控服务与数据聚合 |
-| ConfigManager.cs | 174 | 配置管理（读取/保存/验证） |
-| SystemMonitor.cs | 147 | 系统资源监控（CPU/内存/GPU） |
-| FileMonitor.cs | 107 | 文件数量监控与警报逻辑 |
+| MonitoringService.cs | 190 | 后台监控服务与数据聚合 |
+| Form1.cs | 181 | UI 界面与事件驱动更新 |
 | GpuVramHelper.cs | 98 | GPU 显存查询（PowerShell） |
+| FileMonitor.cs | 71 | 文件数量监控与警报逻辑 |
+| SystemMonitor.cs | 54 | 系统资源监控（CPU/内存/GPU）|
 | AudioPlayer.cs | 35 | 音频循环播放 |
-| MonitoringPathManager.cs | 28 | 路径计算（配置路径+日期子目录） |
+| ConfigManager.cs | 26 | 静态配置管理（2 个方法） |
 | Program.cs | 16 | 程序入口 |
-| **总计** | **1052** | 9 个核心模块 |
+| **总计** | **671** | **8 个核心模块** |
+
+**代码简化成果**:
+- 删除 `MonitoringPathManager.cs` (28 行) - 逻辑合并到 `MonitoringService`
+- 删除 `Config.cs` - 合并到 `ConfigManager.cs`
+- `ConfigManager` 从 174 行压缩到 26 行 (85% 减少)
+- `SystemMonitor` 从 147 行压缩到 54 行 (63% 减少)
+- `Form1` 从 238 行压缩到 181 行 (24% 减少)
+- **总代码量从 1052 行减少到 671 行 (36% 减少)**
 
 ## 监控逻辑
 
@@ -125,8 +132,9 @@ dotnet publish -c Release -o publish
 - ✅ **异步非阻塞**: 所有耗时操作在后台线程执行
 - ✅ **事件驱动**: UI 订阅数据更新事件，避免轮询
 - ✅ **配置热更新**: 运行时修改 `config.json` 立即生效
-- ✅ **精简代码**: 9 个模块共 1052 行，职责清晰
+- ✅ **精简代码**: 8 个模块共 671 行，职责清晰
 - ✅ **零外部依赖**: 仅使用 .NET BCL
+- ✅ **激进简化**: 36% 代码减少，删除所有中间抽象层
 
 ## 开发备注
 
@@ -134,6 +142,7 @@ dotnet publish -c Release -o publish
 - 单一职责原则（每个类只做一件事）
 - 事件驱动架构（数据推送而非拉取）
 - 配置即代码（所有行为由 `config.json` 控制）
+- 极简主义（删除不必要的抽象层和防御性代码）
 
 **性能优化**:
 - 后台线程 500ms 采样间隔（平衡实时性与性能）
