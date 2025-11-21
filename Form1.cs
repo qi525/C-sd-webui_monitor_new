@@ -8,7 +8,6 @@ namespace WebUIMonitor
     public class Form1 : Form
     {
         private MonitoringService _service;
-        private Timer _updateTimer;
 
         private Label lblDateTime, lblGpuName, lblGpuDedicatedUsage, lblGpuSharedUsage, lblCpuUsage, lblMemoryUsage, lblVirtualMemoryUsage, lblDownloadSpeed, lblUploadSpeed, lblFileCount, lblStatus, lblMonitorPath;
         private ColoredProgressBar pgbGpuDedicated, pgbGpuShared, pgbCpu, pgbMemory, pgbDownload, pgbUpload, pgbVirtualMemory;
@@ -19,7 +18,6 @@ namespace WebUIMonitor
             _service = new MonitoringService(ConfigManager.GetMonitoringPath());
             _service.OnDataUpdated += OnMonitoringDataUpdated;
             _service.Start();
-            StartUpdateTimer();
         }
 
         private void OnMonitoringDataUpdated(MonitoringData data)
@@ -90,12 +88,6 @@ namespace WebUIMonitor
             return pb;
         }
 
-        private void StartUpdateTimer()
-        {
-            _updateTimer = new Timer { Interval = 1000 };
-            _updateTimer.Start();
-        }
-
         private void UpdateUIWithData(MonitoringData data)
         {
             lblDateTime.Text = $"日期时间: {data.DateTime}";
@@ -145,7 +137,6 @@ namespace WebUIMonitor
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            _updateTimer?.Stop();
             _service?.Stop();
             base.OnFormClosing(e);
         }

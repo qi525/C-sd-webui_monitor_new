@@ -12,26 +12,30 @@ namespace WebUIMonitor
         private readonly FileMonitor _fileMonitor;
         private readonly SystemMonitor _systemMonitor;
         private readonly AudioPlayer _audioPlayer;
-        private string _lastMonitorDate = "";  // 追踪上一次的监控日期（yyyy-MM-dd），用于自动检测午夜日期变化
+        private bool _isRunning = false; // 【添加】停止标志
         public event Action<MonitoringData> OnDataUpdated;
 
         public MonitoringService(string initialPath)
         {
             _fileMonitor = new FileMonitor();
+            // 【关键改进】设置路径提供器，每次都实时计算路径
+            _fileMonitor.SetPathProvider(GetMonitorPath);
             _systemMonitor = new SystemMonitor();
             _audioPlayer = new AudioPlayer(ConfigManager.GetAudioPath());
         }
 
         public void Start()
         {
+            _isRunning = true;
             _fileMonitor.Start();
             _ = Task.Run(async () =>
             {
-                while (true)
+                while (_isRunning)
                 {
-                    GpuVramHelper.UpdateGpuMemoryCacheAsync(); // 后台更新GPU缓存（非阻塞）
-                    _systemMonitor.UpdateNetworkSpeedCacheAsync(); // 后台更新网络速度缓存（非阻塞）
-                    OnDataUpdated?.Invoke(GetData());
+                    // 【异步后台更新】所有系统监控数据（CPU、内存、网络）
+                    _systemMonitor.UpdateSystemCacheAsync();
+                    GpuVramHelper.UpdateGpuMemoryCacheAsync(); // 异步更新GPU缓存
+                    OnDataUpdated?.Invoke(GetData()); // 发布数据（只读缓存，无阻塞）
                     await Task.Delay(500);
                 }
             });
@@ -39,6 +43,7 @@ namespace WebUIMonitor
 
         public void Stop()
         {
+            _isRunning = false; // 【关键】停止循环
             _fileMonitor.Stop();
             _audioPlayer?.Stop();
         }
@@ -47,29 +52,11 @@ namespace WebUIMonitor
         {
             string basePath = ConfigManager.GetMonitoringPath();
             string todayFolder = Path.Combine(basePath, DateTime.Now.ToString("yyyy-MM-dd"));
-            
-            // 【智能回退逻辑】
-            // 1. 优先返回当前日期的子文件夹（适配Stable Diffusion默认结构）
-            // 2. 如果不存在，回退到配置的基础路径（适配没有日期子文件夹的用户）
-            // 3. 确保日期变化时UI能正确显示，同时不丢弃没有日期子文件夹的用户
             return Directory.Exists(todayFolder) ? todayFolder : basePath;
         }
 
         private MonitoringData GetData()
         {
-            string currentDate = DateTime.Now.ToString("yyyy-MM-dd");
-            string path = GetMonitorPath();
-            
-            // 【核心修复】基于日期字符串（yyyy-MM-dd）检测日期变化，而不是路径
-            // 保证100%捕获午夜日期变化，即使路径相同也会重置
-            if (currentDate != _lastMonitorDate)
-            {
-                _fileMonitor.Reset();  // 重置文件监控状态
-                _lastMonitorDate = currentDate;  // 更新为当前日期
-            }
-            
-            _fileMonitor.SetPath(path);
-            
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
@@ -81,7 +68,7 @@ namespace WebUIMonitor
             return new MonitoringData 
             { 
                 DateTime = _systemMonitor.GetCurrentDateTime(),
-                GpuName = GpuVramHelper.GetGpuName(),
+                GpuName = gpuName,
                 GpuVramUsedGB = usedVramGB,
                 GpuVramTotalGB = totalVramGB,
                 GpuVramPercent = (gpuSuccess && totalVramGB > 0) ? Math.Min((usedVramGB / totalVramGB) * 100, 100) : 0,
@@ -97,7 +84,7 @@ namespace WebUIMonitor
                 UploadMbps = uploadMbps,
                 FileCount = _fileMonitor.FileCount,
                 IsAlarm = isAlarm,
-                TodayMonitoringPath = path 
+                TodayMonitoringPath = _fileMonitor.CurrentPath 
             };
         }
     }

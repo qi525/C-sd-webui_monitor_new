@@ -10,61 +10,23 @@ namespace WebUIMonitor
     {
         private const long ONE_GB = 1024L * 1024L * 1024L;
         private const double BytesToGB = 1024.0 * 1024.0 * 1024.0;
-        private static double? _totalVramGB;
+        private static string _cachedGpuName = "Unknown GPU";  // 仅初始化一次
+        private static double _cachedTotalVramGB = 0;
+        private static double _cachedUsedVramGB = 0;
         private static double _cachedDedicatedUsedGB = 0;
         private static double _cachedSharedUsedGB = 0;
         private static readonly object _lockObject = new object();
 
+        /// <summary>
+        /// 【完全缓存模式】返回缓存的 GPU 信息（无实时计算）
+        /// GPU 名称在初始化时获取一次后就不变，显存使用量由 UpdateGpuMemoryCacheAsync 更新
+        /// </summary>
         public static (string gpuName, double usedVramGB, double totalVramGB, bool success) GetGpuVramInfo()
         {
-            string name = GetGpuName();
-            double totalVram = GetTotalVramGB();
-            double usedVram = GetUsedVramGB();
-            return (name, usedVram, totalVram, totalVram > 0);
-        }
-
-        private static double GetTotalVramGB()
-        {
-            if (_totalVramGB.HasValue) return _totalVramGB.Value;
-            
-            var (_, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
-            double total = Math.Max(dedicatedGB, sharedGB);
-            if (total > 0) { _totalVramGB = total; return total; }
-            return 0;
-        }
-
-        private static double GetUsedVramGB()
-        {
-            try
+            lock (_lockObject)
             {
-                using (var searcher = new ManagementObjectSearcher("select CurrentUsage from Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory"))
-                {
-                    long total = 0;
-                    foreach (ManagementObject obj in searcher.Get())
-                        if (ulong.TryParse(obj["CurrentUsage"]?.ToString() ?? "0", out ulong val))
-                            total += (long)val;
-                    if (total > 0) return Math.Max(0, total / (double)ONE_GB);
-                }
+                return (_cachedGpuName, _cachedUsedVramGB, _cachedTotalVramGB, _cachedTotalVramGB > 0);
             }
-            catch { }
-            return 0;
-        }
-
-        public static string GetGpuName()
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("select Name from Win32_VideoController"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        string name = obj["Name"]?.ToString();
-                        if (!string.IsNullOrEmpty(name) && name != "Unknown GPU") return name;
-                    }
-                }
-            }
-            catch { }
-            return "Unknown GPU";
         }
 
         public static double GetGpuDedicatedMemoryGB()
@@ -97,6 +59,7 @@ namespace WebUIMonitor
 
         /// <summary>
         /// 后台线程调用：更新GPU显存缓存值（异步非阻塞）
+        /// 包括：总显存、已用显存、GPU 名称、专用/共享显存使用量
         /// </summary>
         public static void UpdateGpuMemoryCacheAsync()
         {
@@ -104,17 +67,73 @@ namespace WebUIMonitor
             {
                 try
                 {
+                    // 【GPU 名称】仅第一次初始化（线程安全）
+                    lock (_lockObject)
+                    {
+                        if (_cachedGpuName == "Unknown GPU")
+                        {
+                            _cachedGpuName = QueryGpuName();
+                        }
+                    }
+                    
+                    // 【总显存】从 DXGI 查询
+                    var (_, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
+                    double totalVram = Math.Max(dedicatedGB, sharedGB);
+                    
+                    // 【已用显存】从 Performance Counter 查询
+                    double usedVram = QueryUsedGpuVramGB();
+                    
+                    // 【专用/共享显存】从 PowerShell 计数器查询
                     double dedicated = QueryCounterValue("\\GPU Adapter Memory(*)\\Dedicated Usage");
                     double shared = QueryCounterValue("\\GPU Adapter Memory(*)\\Shared Usage");
                     
+                    // 【更新缓存】
                     lock (_lockObject)
                     {
+                        _cachedTotalVramGB = totalVram;
+                        _cachedUsedVramGB = usedVram;
                         _cachedDedicatedUsedGB = dedicated;
                         _cachedSharedUsedGB = shared;
                     }
                 }
                 catch { }
             });
+        }
+
+        /// <summary>查询 GPU 名称（仅第一次初始化时调用）</summary>
+        private static string QueryGpuName()
+        {
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("select Name from Win32_VideoController"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        string name = obj["Name"]?.ToString();
+                        if (!string.IsNullOrEmpty(name) && name != "Unknown GPU") return name;
+                    }
+                }
+            }
+            catch { }
+            return "Unknown GPU";
+        }
+
+        /// <summary>查询已用显存（GB）</summary>
+        private static double QueryUsedGpuVramGB()
+        {
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("select CurrentUsage from Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory"))
+                {
+                    long total = 0;
+                    foreach (ManagementObject obj in searcher.Get())
+                        if (ulong.TryParse(obj["CurrentUsage"]?.ToString() ?? "0", out ulong val))
+                            total += (long)val;
+                    if (total > 0) return Math.Max(0, total / (double)ONE_GB);
+                }
+            }
+            catch { }
+            return 0;
         }
 
         private static double QueryCounterValue(string counterPath)
