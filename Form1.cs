@@ -53,9 +53,9 @@ namespace WebUIMonitor
             pgbVirtualMemory = AddColoredProgressBar(ref y);
             ///Controls.Add(new Label { Location = new Point(15, y), Size = new Size(660, 2), BackColor = Color.Gray }); y += 10;
             
-            lblDownloadSpeed = AddLabel("下载速度: 0.00 Mbps", ref y);
+            lblDownloadSpeed = AddLabel("下载速度: 0.00 MB/s", ref y);
             pgbDownload = AddColoredProgressBar(ref y);
-            lblUploadSpeed = AddLabel("上传速度: 0.00 Mbps", ref y);
+            lblUploadSpeed = AddLabel("上传速度: 0.00 MB/s", ref y);
             pgbUpload = AddColoredProgressBar(ref y);
             Controls.Add(new Label { Location = new Point(15, y), Size = new Size(660, 2), BackColor = Color.Gray }); y += 10;
             
@@ -108,11 +108,11 @@ namespace WebUIMonitor
             UpdateControl(lblMemoryUsage, pgbMemory, $"内存占用: {data.PhysicalMemoryUsed:F1} GB / {data.PhysicalMemoryTotal:F1} GB ({data.PhysicalMemoryPercent:F1}%)", data.PhysicalMemoryPercent);
             UpdateControl(lblVirtualMemoryUsage, pgbVirtualMemory, $"虚拟内存占用: {data.VirtualMemoryText}", data.VirtualMemoryPercent);
             
-            // 网络速度（进度条范围0-100Mbps）
-            double downloadPercent = Math.Min(data.DownloadMbps / 100 * 100, 100);
-            double uploadPercent = Math.Min(data.UploadMbps / 100 * 100, 100);
-            UpdateControl(lblDownloadSpeed, pgbDownload, $"下载速度: {data.DownloadMbps:F2} Mbps", downloadPercent);
-            UpdateControl(lblUploadSpeed, pgbUpload, $"上传速度: {data.UploadMbps:F2} Mbps", uploadPercent);
+            // 网络速度（进度条范围0-100MB/s）
+            double downloadPercent = Math.Min(data.DownloadMBps / 100 * 100, 100);
+            double uploadPercent = Math.Min(data.UploadMBps / 100 * 100, 100);
+            UpdateControl(lblDownloadSpeed, pgbDownload, $"下载速度: {data.DownloadMBps:F2} MB/s", downloadPercent);
+            UpdateControl(lblUploadSpeed, pgbUpload, $"上传速度: {data.UploadMBps:F2} MB/s", uploadPercent);
             
             lblFileCount.Text = data.FileCount >= 0 ? $"文件数: {data.FileCount}" : "文件数: 初始化中...";
             lblMonitorPath.Text = $"目前监控文件夹位置: {data.TodayMonitoringPath}";

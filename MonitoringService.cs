@@ -32,8 +32,14 @@ namespace WebUIMonitor
             {
                 while (_isRunning)
                 {
-                    // 直接调用 Get 方法，实时计算，无缓存
-                    OnDataUpdated?.Invoke(GetData());
+                    // 在后台线程执行 GetData()，避免阻塞UI
+                    try
+                    {
+                        var data = GetData();
+                        OnDataUpdated?.Invoke(data);
+                    }
+                    catch { }
+                    
                     await Task.Delay(500);
                 }
             });
@@ -58,7 +64,7 @@ namespace WebUIMonitor
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();
-            var (downloadMbps, uploadMbps) = _systemMonitor.GetNetworkSpeed();
+            var (downloadMBps, uploadMBps) = _systemMonitor.GetNetworkSpeed();
             
             bool isAlarm = _fileMonitor.IsAlarm;
             if (isAlarm) _audioPlayer.Play(); else _audioPlayer.Stop();
@@ -78,8 +84,8 @@ namespace WebUIMonitor
                 VirtualMemoryUsed = vmUsed,
                 VirtualMemoryPercent = vmPercent,
                 VirtualMemoryText = vmText,
-                DownloadMbps = downloadMbps,
-                UploadMbps = uploadMbps,
+                DownloadMBps = downloadMBps,
+                UploadMBps = uploadMBps,
                 FileCount = _fileMonitor.FileCount,
                 IsAlarm = isAlarm,
                 TodayMonitoringPath = _fileMonitor.CurrentPath 
@@ -105,8 +111,8 @@ namespace WebUIMonitor
         public double VirtualMemoryUsed { get; set; }
         public double VirtualMemoryPercent { get; set; }
         public string VirtualMemoryText { get; set; }
-        public double DownloadMbps { get; set; }
-        public double UploadMbps { get; set; }
+        public double DownloadMBps { get; set; }
+        public double UploadMBps { get; set; }
         public int FileCount { get; set; }
         public bool IsAlarm { get; set; }
         public string TodayMonitoringPath { get; set; }

@@ -61,15 +61,15 @@ namespace WebUIMonitor
             catch { return (0, 0, 0, "0 GB / 0 GB (0%)"); }
         }
 
-        public (double downloadMbps, double uploadMbps) GetNetworkSpeed()
+        public (double downloadMBps, double uploadMBps) GetNetworkSpeed()
         {
             try
             {
                 double downloadBytes = GetAllNetworkInterfacesSpeed("Bytes Received/sec");
                 double uploadBytes = GetAllNetworkInterfacesSpeed("Bytes Sent/sec");
-                double downloadMbps = Math.Max(0, downloadBytes * 8 / ONE_MBPS);
-                double uploadMbps = Math.Max(0, uploadBytes * 8 / ONE_MBPS);
-                return (Math.Round(downloadMbps, 2), Math.Round(uploadMbps, 2));
+                double downloadMBps = Math.Max(0, downloadBytes / (1024.0 * 1024.0));
+                double uploadMBps = Math.Max(0, uploadBytes / (1024.0 * 1024.0));
+                return (Math.Round(downloadMBps, 2), Math.Round(uploadMBps, 2));
             }
             catch { return (0, 0); }
         }

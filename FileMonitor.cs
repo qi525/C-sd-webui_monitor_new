@@ -23,7 +23,7 @@ namespace WebUIMonitor
 
         public void SetPathProvider(Func<string> pathProvider) => _pathProvider = pathProvider;
 
-        public void Start() => _ = Task.Run(() =>
+        public void Start() => _ = Task.Run(async () =>
         {
             _isRunning = true;
             while (_isRunning)
@@ -37,7 +37,7 @@ namespace WebUIMonitor
                     {
                         _monitoringPath = path;
                         _currentFileCount = 0;
-                        Thread.Sleep(3000);
+                        await Task.Delay(3000);
                         continue;
                     }
 
@@ -79,7 +79,7 @@ namespace WebUIMonitor
                     System.Diagnostics.Debug.WriteLine($"[FileMonitor] 异常: {ex.Message}");
                 }
 
-                Thread.Sleep(3000);
+                await Task.Delay(3000);
             }
         });
 
