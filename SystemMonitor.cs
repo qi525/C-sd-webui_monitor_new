@@ -11,12 +11,9 @@ namespace WebUIMonitor
         private const long ONE_GB = 1024L * 1024L * 1024L;
         private const long ONE_MBPS = 1024L * 1024L;
         
-        // 缓存，避免重复查询
-        private double _cachedPhysicalMemoryTotal = 0;
-        private double _cachedPhysicalMemoryUsed = 0;
-        private double _cachedPhysicalMemoryPercent = 0;
-        private double _cachedDownloadMBps = 0;
-        private double _cachedUploadMBps = 0;
+        // 缓存最新计算结果（供UI快速读取）
+        private (double totalGB, double usedGB, double percentageUsed) _lastPhysicalMemory = (0, 0, 0);
+        private (double downloadMBps, double uploadMBps) _lastNetworkSpeed = (0, 0);
 
         public SystemMonitor()
         {
@@ -26,19 +23,25 @@ namespace WebUIMonitor
             _cpuCounter.NextValue();
             _committedBytesCounter.NextValue();
             _commitLimitCounter.NextValue();
-            
-            // 初始化缓存
-            UpdateCacheAsync();
+        }
+
+        public string GetCurrentDateTime() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+        public float GetCpuUsage() => (float)_cpuCounter.NextValue();
+
+        public (double totalGB, double usedGB, double percentageUsed) GetPhysicalMemory()
+        {
+            // 返回最新计算结果，不阻塞
+            return _lastPhysicalMemory;
         }
         
-        /// <summary>后台异步更新缓存（避免UI阻塞）</summary>
-        public void UpdateCacheAsync()
+        /// <summary>后台异步计算物理内存（不阻塞UI）</summary>
+        public void UpdatePhysicalMemoryAsync()
         {
             Task.Run(() =>
             {
                 try
                 {
-                    // 物理内存
                     var availableMB = new PerformanceCounter("Memory", "Available MBytes", true).NextValue();
                     using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))
                     {
@@ -48,29 +51,14 @@ namespace WebUIMonitor
                             if (long.TryParse(mo["Capacity"]?.ToString(), out long capacity))
                                 totalBytes += capacity;
                         }
-                        _cachedPhysicalMemoryTotal = totalBytes > 0 ? totalBytes / (double)ONE_GB : 32.0;
-                        _cachedPhysicalMemoryUsed = _cachedPhysicalMemoryTotal - availableMB / 1024.0;
-                        _cachedPhysicalMemoryPercent = Math.Round(_cachedPhysicalMemoryUsed / _cachedPhysicalMemoryTotal * 100, 1);
+                        double physicalTotal = totalBytes > 0 ? totalBytes / (double)ONE_GB : 32.0;
+                        double physicalUsed = physicalTotal - availableMB / 1024.0;
+                        double physicalPercent = Math.Round(physicalUsed / physicalTotal * 100, 1);
+                        _lastPhysicalMemory = (physicalTotal, physicalUsed, physicalPercent);
                     }
-                    
-                    // 网络速度
-                    double downloadBytes = GetAllNetworkInterfacesSpeed("Bytes Received/sec");
-                    double uploadBytes = GetAllNetworkInterfacesSpeed("Bytes Sent/sec");
-                    _cachedDownloadMBps = Math.Max(0, downloadBytes / (1024.0 * 1024.0));
-                    _cachedUploadMBps = Math.Max(0, uploadBytes / (1024.0 * 1024.0));
                 }
                 catch { }
             });
-        }
-
-        public string GetCurrentDateTime() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-        public float GetCpuUsage() => (float)_cpuCounter.NextValue();
-
-        public (double totalGB, double usedGB, double percentageUsed) GetPhysicalMemory()
-        {
-            // 直接返回缓存值，不阻塞
-            return (_cachedPhysicalMemoryTotal, _cachedPhysicalMemoryUsed, _cachedPhysicalMemoryPercent);
         }
 
         public (double totalGB, double usedGB, double percentageUsed, string text) GetVirtualMemory()
@@ -90,8 +78,25 @@ namespace WebUIMonitor
 
         public (double downloadMBps, double uploadMBps) GetNetworkSpeed()
         {
-            // 直接返回缓存值，不阻塞
-            return (_cachedDownloadMBps, _cachedUploadMBps);
+            // 返回最新计算结果，不阻塞
+            return _lastNetworkSpeed;
+        }
+        
+        /// <summary>后台异步计算网络速度（不阻塞UI）</summary>
+        public void UpdateNetworkSpeedAsync()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    double downloadBytes = GetAllNetworkInterfacesSpeed("Bytes Received/sec");
+                    double uploadBytes = GetAllNetworkInterfacesSpeed("Bytes Sent/sec");
+                    double downloadMBps = Math.Max(0, downloadBytes / (1024.0 * 1024.0));
+                    double uploadMBps = Math.Max(0, uploadBytes / (1024.0 * 1024.0));
+                    _lastNetworkSpeed = (Math.Round(downloadMBps, 2), Math.Round(uploadMBps, 2));
+                }
+                catch { }
+            });
         }
 
         /// <summary>获取网络速度（无阻塞）</summary>

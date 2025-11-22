@@ -22,23 +22,30 @@ namespace WebUIMonitor
             _fileMonitor.SetPathProvider(GetMonitorPath);
             _systemMonitor = new SystemMonitor();
             _audioPlayer = new AudioPlayer(ConfigManager.GetAudioPath());
-            
-            // 初始化缓存（第一次启动时立即调用）
-            _systemMonitor.UpdateCacheAsync();
-            GpuVramHelper.UpdateGpuCacheAsync();
         }
 
         public void Start()
         {
             _isRunning = true;
             _fileMonitor.Start();
+            
+            // 初始化一次数据
+            GpuVramHelper.UpdateGpuAsync();
+            _systemMonitor.UpdatePhysicalMemoryAsync();
+            _systemMonitor.UpdateNetworkSpeedAsync();
+            
             _ = Task.Run(async () =>
             {
                 while (_isRunning)
                 {
-                    // 在后台线程执行 GetData()，避免阻塞UI
                     try
                     {
+                        // 触发后台异步更新（不等待，立即继续）
+                        GpuVramHelper.UpdateGpuAsync();
+                        _systemMonitor.UpdatePhysicalMemoryAsync();
+                        _systemMonitor.UpdateNetworkSpeedAsync();
+                        
+                        // 立即获取最新数据发送给UI
                         var data = GetData();
                         OnDataUpdated?.Invoke(data);
                     }
@@ -65,10 +72,6 @@ namespace WebUIMonitor
 
         private MonitoringData GetData()
         {
-            // 触发后台缓存更新
-            _systemMonitor.UpdateCacheAsync();
-            GpuVramHelper.UpdateGpuCacheAsync();
-            
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();

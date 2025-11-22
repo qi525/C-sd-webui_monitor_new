@@ -11,35 +11,34 @@ namespace WebUIMonitor
         private const long ONE_GB = 1024L * 1024L * 1024L;
         private const double BytesToGB = 1024.0 * 1024.0 * 1024.0;
         
-        // 缓存 GPU 数据
-        private static string _cachedGpuName = "Unknown GPU";
-        private static double _cachedDedicatedGB = 0;
-        private static double _cachedSharedGB = 0;
-        private static double _cachedUsedVramGB = 0;
-        private static double _cachedDedicatedUsedGB = 0;
-        private static double _cachedSharedUsedGB = 0;
+        // 缓存最新计算结果（供UI快速读取）
+        private static (string gpuName, double usedVramGB, double totalVramGB, bool success) _lastGpuVramInfo = ("Unknown GPU", 0, 0, false);
+        private static double _lastDedicatedGB = 0;
+        private static double _lastSharedGB = 0;
+        private static double _lastDedicatedUsed = 0;
+        private static double _lastSharedUsed = 0;
 
         public static (string gpuName, double usedVramGB, double totalVramGB, bool success) GetGpuVramInfo()
         {
-            // 直接返回缓存，无阻塞
-            double totalVram = Math.Max(_cachedDedicatedGB, _cachedSharedGB);
-            return (_cachedGpuName, _cachedUsedVramGB, totalVram, totalVram > 0);
+            // 返回最新计算结果，不阻塞
+            return _lastGpuVramInfo;
         }
         
-        /// <summary>后台异步更新 GPU 缓存，避免阻塞 UI</summary>
-        public static void UpdateGpuCacheAsync()
+        /// <summary>后台异步计算GPU数据（不阻塞UI）</summary>
+        public static void UpdateGpuAsync()
         {
             Task.Run(() =>
             {
                 try
                 {
                     var (gpuName, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
-                    _cachedGpuName = gpuName;
-                    _cachedDedicatedGB = dedicatedGB;
-                    _cachedSharedGB = sharedGB;
-                    _cachedUsedVramGB = QueryUsedGpuVramGB();
-                    _cachedDedicatedUsedGB = QueryCounterValue("\\GPU Adapter Memory(*)\\Dedicated Usage");
-                    _cachedSharedUsedGB = QueryCounterValue("\\GPU Adapter Memory(*)\\Shared Usage");
+                    double totalVram = Math.Max(dedicatedGB, sharedGB);
+                    double usedVram = QueryUsedGpuVramGB();
+                    _lastGpuVramInfo = (gpuName, usedVram, totalVram, totalVram > 0);
+                    _lastDedicatedGB = dedicatedGB;
+                    _lastSharedGB = sharedGB;
+                    _lastDedicatedUsed = QueryCounterValue("\\GPU Adapter Memory(*)\\Dedicated Usage");
+                    _lastSharedUsed = QueryCounterValue("\\GPU Adapter Memory(*)\\Shared Usage");
                 }
                 catch { }
             });
@@ -47,22 +46,22 @@ namespace WebUIMonitor
 
         public static double GetGpuDedicatedMemoryGB()
         {
-            return _cachedDedicatedGB;
+            return _lastDedicatedGB;
         }
 
         public static double GetGpuSharedMemoryGB()
         {
-            return _cachedSharedGB;
+            return _lastSharedGB;
         }
 
         public static double GetGpuAdapterDedicatedUsedGB()
         {
-            return _cachedDedicatedUsedGB;
+            return _lastDedicatedUsed;
         }
 
         public static double GetGpuAdapterSharedUsedGB()
         {
-            return _cachedSharedUsedGB;
+            return _lastSharedUsed;
         }
 
         /// <summary>查询 GPU 名称（仅第一次初始化时调用）</summary>
