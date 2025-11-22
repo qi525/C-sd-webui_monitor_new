@@ -6,88 +6,87 @@ using System.Threading.Tasks;
 namespace WebUIMonitor
 {
     /// <summary>
-    /// 文件监控器 - 监控指定文件夹的文件变化
+    /// 文件监控器 - 实时轮询监听文件夹
     /// 
-    /// 报警逻辑说明：
-    /// - 只有当文件数量【长期不变】（超过30秒）才报警
-    /// - 增加、减少都视为正常变化，不报警
-    /// 
-    /// 原因：
-    /// 1. 用户可能会归档/分类文件，导致数量减少
-    /// 2. AI 出图时会不断增加文件，但如果停止，文件数就保持不变
-    /// 3. 只有文件数保持不变超过30秒，才能说明任务已停止
-    /// 
-    /// 实现方式：
-    /// - 每次检查都【实时计算路径】，适配有/无日期子文件夹的场景
-    /// - 每 3 秒检查一次（可配置）
-    /// - 所有逻辑均为实时计算，无需手动触发重置
+    /// 报警逻辑：
+    /// - 文件数有变化 → 清除报警，重置计时器
+    /// - 文件数30秒无变化 → 触发报警
     /// </summary>
     public class FileMonitor
     {
-        private Func<string> _pathProvider; // 改用委托，每次实时获取路径
-        private bool _isAlarm;
-        private int _lastFileCount = -1;
+        private Func<string> _pathProvider;
+        private int _currentFileCount = 0;
         private DateTime _lastChangeTime = DateTime.Now;
+        private bool _isAlarm = false;
+        private string _monitoringPath = "";
         private bool _isRunning = false;
-        private string _currentPath; // 保存当前监控的路径，供外部查询
-        private readonly object _lockObject = new object(); // 线程安全锁
 
-        /// <summary>设置路径提供器（每次都会实时计算路径）</summary>
         public void SetPathProvider(Func<string> pathProvider) => _pathProvider = pathProvider;
 
-        public void Start() => _ = Task.Run(() => { _isRunning = true; while (_isRunning) { CheckFileCount(); Thread.Sleep(3000); } });
-
-        private void CheckFileCount()
+        public void Start() => _ = Task.Run(() =>
         {
-            // 【核心改进】每次检查时都实时获取路径
-            string currentPath = _pathProvider?.Invoke();
-            if (string.IsNullOrEmpty(currentPath) || !Directory.Exists(currentPath)) 
-            { 
-                lock (_lockObject) { _lastFileCount = 0; _currentPath = currentPath; }
-                return; 
-            }
-            
-            int count = Directory.GetFiles(currentPath).Length;
-            
-            lock (_lockObject)
+            _isRunning = true;
+            while (_isRunning)
             {
-                _currentPath = currentPath; // 【关键】同时更新路径
-                
-                if (_lastFileCount == -1) 
-                { 
-                    _lastFileCount = count; 
-                    _lastChangeTime = DateTime.Now; 
-                    return; 
-                }
-                
-                // 【改进的报警逻辑】
-                // 只有当文件数量保持不变超过30秒才报警
-                if (count != _lastFileCount) 
-                { 
-                    // 文件数量有变化（增加或减少），更新计数和时间戳
-                    _lastFileCount = count; 
-                    _lastChangeTime = DateTime.Now; 
-                    _isAlarm = false;  // 有变化就清除报警
-                    return; 
-                }
-                
-                // 文件数量没有变化，检查是否超过30秒
-                _isAlarm = (int)(DateTime.Now - _lastChangeTime).TotalSeconds >= 30;
-            }
-        }
+                try
+                {
+                    // 每次都实时获取路径（支持凌晨自动切换）
+                    string path = _pathProvider?.Invoke() ?? "";
+                    
+                    if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+                    {
+                        _monitoringPath = path;
+                        _currentFileCount = 0;
+                        Thread.Sleep(3000);
+                        continue;
+                    }
 
-        public bool IsAlarm 
-        { 
-            get { lock (_lockObject) { return _isAlarm; } } 
-        }
-        public int FileCount 
-        { 
-            get { lock (_lockObject) { return _lastFileCount; } } 
-        }
-        public string CurrentPath 
-        { 
-            get { lock (_lockObject) { return _currentPath; } } 
-        }
+                    // 直接获取文件数，无缓存
+                    int fileCount = Directory.GetFiles(path).Length;
+
+                    // 路径有变化（凌晨切换）
+                    if (_monitoringPath != path)
+                    {
+                        _monitoringPath = path;
+                        _currentFileCount = fileCount;
+                        _lastChangeTime = DateTime.Now;
+                        _isAlarm = false;
+                        System.Diagnostics.Debug.WriteLine($"[FileMonitor] 路径切换: {path}");
+                    }
+                    // 文件数有变化
+                    else if (fileCount != _currentFileCount)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[FileMonitor] 文件数变化: {_currentFileCount} → {fileCount}");
+                        _currentFileCount = fileCount;
+                        _lastChangeTime = DateTime.Now;
+                        _isAlarm = false;
+                    }
+                    // 文件数未变化，检查是否超过30秒
+                    else
+                    {
+                        int secondsNoChange = (int)(DateTime.Now - _lastChangeTime).TotalSeconds;
+                        bool newAlarm = secondsNoChange >= 30;
+                        
+                        if (newAlarm && !_isAlarm)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FileMonitor] 触发报警 - {secondsNoChange}秒内文件数保持 {_currentFileCount} 不变");
+                        }
+                        _isAlarm = newAlarm;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[FileMonitor] 异常: {ex.Message}");
+                }
+
+                Thread.Sleep(3000);
+            }
+        });
+
+        public bool IsAlarm => _isAlarm;
+        public int FileCount => _currentFileCount;
+        public string CurrentPath => _monitoringPath;
+
         public void Stop() => _isRunning = false;
     }
 }

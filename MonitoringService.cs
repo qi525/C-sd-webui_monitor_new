@@ -32,10 +32,8 @@ namespace WebUIMonitor
             {
                 while (_isRunning)
                 {
-                    // 【异步后台更新】所有系统监控数据（CPU、内存、网络）
-                    _systemMonitor.UpdateSystemCacheAsync();
-                    GpuVramHelper.UpdateGpuMemoryCacheAsync(); // 异步更新GPU缓存
-                    OnDataUpdated?.Invoke(GetData()); // 发布数据（只读缓存，无阻塞）
+                    // 直接调用 Get 方法，实时计算，无缓存
+                    OnDataUpdated?.Invoke(GetData());
                     await Task.Delay(500);
                 }
             });
