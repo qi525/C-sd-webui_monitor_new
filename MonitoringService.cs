@@ -22,6 +22,10 @@ namespace WebUIMonitor
             _fileMonitor.SetPathProvider(GetMonitorPath);
             _systemMonitor = new SystemMonitor();
             _audioPlayer = new AudioPlayer(ConfigManager.GetAudioPath());
+            
+            // 初始化缓存（第一次启动时立即调用）
+            _systemMonitor.UpdateCacheAsync();
+            GpuVramHelper.UpdateGpuCacheAsync();
         }
 
         public void Start()
@@ -61,6 +65,10 @@ namespace WebUIMonitor
 
         private MonitoringData GetData()
         {
+            // 触发后台缓存更新
+            _systemMonitor.UpdateCacheAsync();
+            GpuVramHelper.UpdateGpuCacheAsync();
+            
             var (gpuName, usedVramGB, totalVramGB, gpuSuccess) = GpuVramHelper.GetGpuVramInfo();
             var (physTotal, physUsed, physPercent) = _systemMonitor.GetPhysicalMemory();
             var (vmTotal, vmUsed, vmPercent, vmText) = _systemMonitor.GetVirtualMemory();

@@ -41,8 +41,12 @@ namespace WebUIMonitor
                         continue;
                     }
 
-                    // 直接获取文件数，无缓存
-                    int fileCount = Directory.GetFiles(path).Length;
+                    // 在后台线程中读取文件（避免 I/O 阻塞）
+                    int fileCount = await Task.Run(() => 
+                    {
+                        try { return Directory.GetFiles(path).Length; }
+                        catch { return 0; }
+                    });
 
                     // 路径有变化（凌晨切换）
                     if (_monitoringPath != path)

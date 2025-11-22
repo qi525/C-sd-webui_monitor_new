@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Management;
+using System.Threading.Tasks;
 
 namespace WebUIMonitor
 {
@@ -9,6 +10,13 @@ namespace WebUIMonitor
         private PerformanceCounter _cpuCounter, _committedBytesCounter, _commitLimitCounter;
         private const long ONE_GB = 1024L * 1024L * 1024L;
         private const long ONE_MBPS = 1024L * 1024L;
+        
+        // 缓存，避免重复查询
+        private double _cachedPhysicalMemoryTotal = 0;
+        private double _cachedPhysicalMemoryUsed = 0;
+        private double _cachedPhysicalMemoryPercent = 0;
+        private double _cachedDownloadMBps = 0;
+        private double _cachedUploadMBps = 0;
 
         public SystemMonitor()
         {
@@ -18,6 +26,41 @@ namespace WebUIMonitor
             _cpuCounter.NextValue();
             _committedBytesCounter.NextValue();
             _commitLimitCounter.NextValue();
+            
+            // 初始化缓存
+            UpdateCacheAsync();
+        }
+        
+        /// <summary>后台异步更新缓存（避免UI阻塞）</summary>
+        public void UpdateCacheAsync()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    // 物理内存
+                    var availableMB = new PerformanceCounter("Memory", "Available MBytes", true).NextValue();
+                    using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))
+                    {
+                        long totalBytes = 0;
+                        foreach (ManagementObject mo in searcher.Get())
+                        {
+                            if (long.TryParse(mo["Capacity"]?.ToString(), out long capacity))
+                                totalBytes += capacity;
+                        }
+                        _cachedPhysicalMemoryTotal = totalBytes > 0 ? totalBytes / (double)ONE_GB : 32.0;
+                        _cachedPhysicalMemoryUsed = _cachedPhysicalMemoryTotal - availableMB / 1024.0;
+                        _cachedPhysicalMemoryPercent = Math.Round(_cachedPhysicalMemoryUsed / _cachedPhysicalMemoryTotal * 100, 1);
+                    }
+                    
+                    // 网络速度
+                    double downloadBytes = GetAllNetworkInterfacesSpeed("Bytes Received/sec");
+                    double uploadBytes = GetAllNetworkInterfacesSpeed("Bytes Sent/sec");
+                    _cachedDownloadMBps = Math.Max(0, downloadBytes / (1024.0 * 1024.0));
+                    _cachedUploadMBps = Math.Max(0, uploadBytes / (1024.0 * 1024.0));
+                }
+                catch { }
+            });
         }
 
         public string GetCurrentDateTime() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -26,24 +69,8 @@ namespace WebUIMonitor
 
         public (double totalGB, double usedGB, double percentageUsed) GetPhysicalMemory()
         {
-            try
-            {
-                var availableMB = new PerformanceCounter("Memory", "Available MBytes", true).NextValue();
-                using (var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory"))
-                {
-                    long totalBytes = 0;
-                    foreach (ManagementObject mo in searcher.Get())
-                    {
-                        if (long.TryParse(mo["Capacity"]?.ToString(), out long capacity))
-                            totalBytes += capacity;
-                    }
-                    double physicalTotal = totalBytes > 0 ? totalBytes / (double)ONE_GB : 32.0;
-                    double physicalUsed = physicalTotal - availableMB / 1024.0;
-                    double physicalPercent = Math.Round(physicalUsed / physicalTotal * 100, 1);
-                    return (physicalTotal, physicalUsed, physicalPercent);
-                }
-            }
-            catch { return (0, 0, 0); }
+            // 直接返回缓存值，不阻塞
+            return (_cachedPhysicalMemoryTotal, _cachedPhysicalMemoryUsed, _cachedPhysicalMemoryPercent);
         }
 
         public (double totalGB, double usedGB, double percentageUsed, string text) GetVirtualMemory()
@@ -63,15 +90,8 @@ namespace WebUIMonitor
 
         public (double downloadMBps, double uploadMBps) GetNetworkSpeed()
         {
-            try
-            {
-                double downloadBytes = GetAllNetworkInterfacesSpeed("Bytes Received/sec");
-                double uploadBytes = GetAllNetworkInterfacesSpeed("Bytes Sent/sec");
-                double downloadMBps = Math.Max(0, downloadBytes / (1024.0 * 1024.0));
-                double uploadMBps = Math.Max(0, uploadBytes / (1024.0 * 1024.0));
-                return (Math.Round(downloadMBps, 2), Math.Round(uploadMBps, 2));
-            }
-            catch { return (0, 0); }
+            // 直接返回缓存值，不阻塞
+            return (_cachedDownloadMBps, _cachedUploadMBps);
         }
 
         /// <summary>获取网络速度（无阻塞）</summary>
