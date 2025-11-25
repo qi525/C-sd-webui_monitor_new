@@ -34,6 +34,7 @@ namespace WebUIMonitor
             _systemMonitor.UpdatePhysicalMemoryAsync();
             _systemMonitor.UpdateNetworkSpeedAsync();
             
+            // 【改进】主监控循环 - 2秒刷新一次
             _ = Task.Run(async () =>
             {
                 while (_isRunning)
@@ -51,7 +52,7 @@ namespace WebUIMonitor
                     }
                     catch { }
                     
-                    await Task.Delay(500);
+                    await Task.Delay(2000);
                 }
             });
         }

@@ -17,6 +17,9 @@ namespace WebUIMonitor
         private static double _lastSharedGB = 0;
         private static double _lastDedicatedUsed = 0;
         private static double _lastSharedUsed = 0;
+        
+        // 【优化】硬件总量（仅初始化一次）
+        private static bool _isInitialized = false;
 
         public static (string gpuName, double usedVramGB, double totalVramGB, bool success) GetGpuVramInfo()
         {
@@ -31,12 +34,22 @@ namespace WebUIMonitor
             {
                 try
                 {
-                    var (gpuName, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
-                    double totalVram = Math.Max(dedicatedGB, sharedGB);
+                    // 【优化】仅初始化一次硬件总量
+                    if (!_isInitialized)
+                    {
+                        var (gpuName, dedicatedGB, sharedGB) = GetGpuMemoryFromDxgi();
+                        _lastDedicatedGB = dedicatedGB;
+                        _lastSharedGB = sharedGB;
+                        _lastGpuVramInfo = (gpuName, 0, Math.Max(dedicatedGB, sharedGB), Math.Max(dedicatedGB, sharedGB) > 0);
+                        _isInitialized = true;
+                    }
+
+                    // 【优化】只更新实时变化的数据（已用显存）
                     double usedVram = QueryUsedGpuVramGB();
-                    _lastGpuVramInfo = (gpuName, usedVram, totalVram, totalVram > 0);
-                    _lastDedicatedGB = dedicatedGB;
-                    _lastSharedGB = sharedGB;
+                    double totalVram = Math.Max(_lastDedicatedGB, _lastSharedGB);
+                    _lastGpuVramInfo = (_lastGpuVramInfo.gpuName, usedVram, totalVram, totalVram > 0);
+                    
+                    // 【优化】专用/共享显存的已用量（实时更新）
                     _lastDedicatedUsed = QueryCounterValue("\\GPU Adapter Memory(*)\\Dedicated Usage");
                     _lastSharedUsed = QueryCounterValue("\\GPU Adapter Memory(*)\\Shared Usage");
                 }
@@ -111,9 +124,10 @@ namespace WebUIMonitor
                 using (var p = new Process())
                 {
                     p.StartInfo.FileName = "powershell";
-                    p.StartInfo.Arguments = $"-NoProfile -Command \"{command}\"";
+                    p.StartInfo.Arguments = $"-NoProfile -WindowStyle Hidden -Command \"{command}\"";
                     p.StartInfo.UseShellExecute = false;
                     p.StartInfo.RedirectStandardOutput = true;
+                    p.StartInfo.RedirectStandardError = true;
                     p.StartInfo.CreateNoWindow = true;
                     p.Start();
                     if (p.WaitForExit(5000) && double.TryParse(p.StandardOutput.ReadToEnd().Trim(), out double bytes) && bytes > 0)
