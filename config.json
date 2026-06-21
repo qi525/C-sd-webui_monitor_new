@@ -1,5 +1,10 @@
 {
-  "MonitoringPath": "C:\\stable-diffusion-webui\\outputs\\txt2img-images",
+  "MonitoringPaths": [
+    "C:\\stable-diffusion-webui\\outputs\\txt2img-images",
+    "C:\\stable-diffusion-webui-reForge\\outputs\\txt2img-images",
+    "C:\\sd-webui-forge-classic\\output\\txt2img-images"
+  ],
   "AudioPath": "alarm.wav",
-  "AutoDetect": true
+  "AutoDetect": true,
+  "MonitoringIntervalSeconds": 3
 }

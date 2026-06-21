@@ -1,0 +1,4 @@
+编译exe代码：
+dotnet publish -c Release -r win-x64 --self-contained
+生成位置：
+"C:\个人数据\C#Code\C#sd-webui_monitor_new\bin\Release\net10.0-windows\win-x64\publish\WebUIMonitor.exe"
