@@ -30,7 +30,7 @@ namespace WebUIMonitor
         {
             // 窗口基本设置
             this.Text = "WebUI 文件监控 & 系统监控";
-            this.Size = new Size(720, 750);
+            this.Size = new Size(720, 825);
             this.BackColor = Color.FromArgb(32, 32, 32);
             this.ForeColor = Color.White;
             this.StartPosition = FormStartPosition.CenterScreen;
